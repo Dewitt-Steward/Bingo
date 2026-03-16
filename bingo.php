@@ -8880,6 +8880,12 @@ function dlbh_bingo_portal_shortcode($atts = array()) {
                                 <div class="dlbh-inbox-field-value" style="font-weight:700;">Play</div>
                                 <div class="dlbh-inbox-field-value" style="font-weight:700;">Access Code: <?php echo htmlspecialchars((string)$dlbh_play_access_code, ENT_QUOTES, 'UTF-8'); ?></div>
                             </div>
+                            <div style="display:flex;justify-content:center;align-items:center;margin:4px 0 14px 0;">
+                                <div id="dlbh-live-call-pill" class="dlbh-inbox-field-value" style="font-weight:700;font-size:1.25rem;padding:8px 14px;border:1px solid #d1d5db;border-radius:8px;background:#ffffff;">Current Call: --</div>
+                            </div>
+                            <div style="display:flex;justify-content:center;align-items:center;margin:0 0 12px 0;">
+                                <a href="https://dewitt-steward.github.io/Bingo/" target="lpb_caller_window" class="dlbh-inbox-btn" style="text-decoration:none;">Open Live Caller</a>
+                            </div>
                             <?php if (empty($dlbh_play_cards)): ?>
                                 <div class="dlbh-inbox-field-value">No bingo cards found for this family in Bingo/Inventory.</div>
                             <?php else: ?>
@@ -9775,6 +9781,42 @@ function dlbh_bingo_portal_shortcode($atts = array()) {
                 });
             }
         }
+    })();
+    (function() {
+        var liveCall = document.getElementById('dlbh-live-call-pill');
+        if (!liveCall) return;
+        var setCall = function(letter, number) {
+            var l = String(letter || '').trim().toUpperCase();
+            var n = String(number || '').replace(/[^0-9]/g, '');
+            if (!l || !n) return;
+            liveCall.textContent = 'Current Call: ' + l + n;
+        };
+        var isAllowedOrigin = function(origin) {
+            if (typeof origin !== 'string') return false;
+            return origin.indexOf('https://dewitt-steward.github.io') === 0 ||
+                origin.indexOf('https://classic.letsplaybingo.io') === 0;
+        };
+        try {
+            var cached = localStorage.getItem('dlbh_live_call_last');
+            if (cached) {
+                var parsed = JSON.parse(cached);
+                if (parsed && parsed.letter && parsed.number) setCall(parsed.letter, parsed.number);
+            }
+        } catch (e) {}
+        window.addEventListener('message', function(event) {
+            if (!isAllowedOrigin(event.origin)) return;
+            var data = event.data;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch (e) { return; }
+            }
+            if (!data || data.type !== 'LPB_CALL') return;
+            var letter = (data.letter || '').toString();
+            var number = data.number;
+            setCall(letter, number);
+            try {
+                localStorage.setItem('dlbh_live_call_last', JSON.stringify({ letter: letter, number: number }));
+            } catch (e) {}
+        });
     })();
     (function() {
         var carousels = document.querySelectorAll('.dlbh-bingo-carousel');

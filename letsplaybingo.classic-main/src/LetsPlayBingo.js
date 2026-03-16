@@ -316,6 +316,34 @@ class LetsPlayBingo extends Component {
 	};
 
 	/*
+	 *  Broadcast current called ball so external pages (like bingo.php Play)
+	 *  can render the live call in real time.
+	 */
+	broadcastCurrentCall = (ball) => {
+		if (!ball || !ball.letter || !ball.number) return;
+		const payload = {
+			type: 'LPB_CALL',
+			letter: ball.letter,
+			number: ball.number,
+			call: ball.letter + '' + ball.number,
+			ts: Date.now(),
+		};
+		try {
+			localStorage.setItem('lpbclassic_current_call', JSON.stringify(payload));
+		} catch (e) {}
+		try {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage(payload, '*');
+			}
+		} catch (e) {}
+		try {
+			if (window.opener && !window.opener.closed) {
+				window.opener.postMessage(payload, '*');
+			}
+		} catch (e) {}
+	};
+
+	/*
 	 *  Reset Game Function
 	 *  Map out the original balls array and update
 	 *  active and called statuses to false
@@ -419,6 +447,7 @@ class LetsPlayBingo extends Component {
 			// set status of ball as called and active
 			newBall.called = true;
 			newBall.active = true;
+			this.broadcastCurrentCall(newBall);
 			// call the new ball, first call it all together, then call each character individually
 			let ballstring = newBall.number.toString();
 			this.say([
