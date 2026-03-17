@@ -343,6 +343,15 @@ class LetsPlayBingo extends Component {
 			localStorage.setItem('lpbclassic_current_call', JSON.stringify(payload));
 		} catch (e) {}
 		try {
+			window.name =
+				'lpb_caller_window|LPB_CALL|' +
+				String(payload.letter).toUpperCase() +
+				'|' +
+				String(payload.number).replace(/[^0-9]/g, '') +
+				'|' +
+				String(payload.ts || Date.now());
+		} catch (e) {}
+		try {
 			if (window.parent && window.parent !== window) {
 				window.parent.postMessage(payload, '*');
 			}
@@ -405,6 +414,25 @@ class LetsPlayBingo extends Component {
 
 	notifyBridgeReady = () => {
 		const payload = { type: 'LPB_READY', ts: Date.now() };
+		try {
+			const raw = localStorage.getItem('lpbclassic_current_call');
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				if (parsed && parsed.letter && parsed.number) {
+					window.name =
+						'lpb_caller_window|LPB_CALL|' +
+						String(parsed.letter).toUpperCase() +
+						'|' +
+						String(parsed.number).replace(/[^0-9]/g, '') +
+						'|' +
+						String(Date.now());
+				} else {
+					window.name = 'lpb_caller_window';
+				}
+			} else {
+				window.name = 'lpb_caller_window';
+			}
+		} catch (e) {}
 		try {
 			if (window.parent && window.parent !== window) {
 				window.parent.postMessage(payload, '*');
