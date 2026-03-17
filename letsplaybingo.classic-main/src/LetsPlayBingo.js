@@ -107,6 +107,7 @@ const newGameState = {
 	running: false,
 	gameId: 1,
 	tableEmpty: false,
+	sessionAction: 'reset',
 };
 
 class LetsPlayBingo extends Component {
@@ -207,6 +208,7 @@ class LetsPlayBingo extends Component {
 			running: false,
 			gameId: 1,
 			tableEmpty: false,
+			sessionAction: 'reset',
 			interval: 0,
 			delay: 10000,
 			selectedCaller: null,
@@ -334,6 +336,7 @@ class LetsPlayBingo extends Component {
 			running: !!this.state.running,
 			gameId: parseInt(this.state.gameId, 10) || 1,
 			tableEmpty: !!this.state.tableEmpty,
+			sessionAction: this.state.sessionAction || 'play',
 			delay: parseInt(this.state.delay, 10) || 10000,
 			showAlert: !!this.state.showAlert,
 			ts: Date.now(),
@@ -389,6 +392,7 @@ class LetsPlayBingo extends Component {
 						running: false,
 						gameId: parseInt(session.gameId, 10) || 1,
 						tableEmpty: !!session.tableEmpty,
+						sessionAction: session.sessionAction || 'play',
 						delay: parseInt(session.delay, 10) || 10000,
 						showAlert: !!session.showAlert,
 						showBackdrop: !!session.showAlert,
@@ -619,7 +623,7 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: resetBalls, newGame: true, running: false, gameId: (parseInt(this.state.gameId, 10) || 1) + 1, tableEmpty: false }, () => {
+		this.setState({ balls: resetBalls, newGame: true, running: false, gameId: (parseInt(this.state.gameId, 10) || 1) + 1, tableEmpty: false, sessionAction: 'reset' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -638,7 +642,7 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: clearedBalls, newGame: true, running: false, tableEmpty: true }, () => {
+		this.setState({ balls: clearedBalls, newGame: true, running: false, tableEmpty: true, sessionAction: 'clear_table' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -647,7 +651,7 @@ class LetsPlayBingo extends Component {
 		if (this.state.showAlert === true) {
 			this.closeAlert();
 		}
-		this.setState({ tableEmpty: false }, () => {
+		this.setState({ tableEmpty: false, sessionAction: 'set_table' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -675,7 +679,7 @@ class LetsPlayBingo extends Component {
 		} else {
 			clearInterval(this.state.interval);
 		}
-		this.setState({ newGame: false, running: !this.state.running, tableEmpty: false }, () => {
+		this.setState({ newGame: false, running: !this.state.running, tableEmpty: false, sessionAction: 'play' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -693,9 +697,10 @@ class LetsPlayBingo extends Component {
 				delay: e.target.value,
 				interval: setInterval(this.callNumber, e.target.value),
 				tableEmpty: false,
+				sessionAction: 'play',
 			});
 		} else {
-			this.setState({ delay: e.target.value, tableEmpty: false });
+			this.setState({ delay: e.target.value, tableEmpty: false, sessionAction: 'play' });
 		}
 	};
 
@@ -753,7 +758,7 @@ class LetsPlayBingo extends Component {
 					: newBall.number,
 			]);
 			// update the state to re-render the board
-			this.setState({ balls: balls, tableEmpty: false }, () => {
+			this.setState({ balls: balls, tableEmpty: false, sessionAction: 'play' }, () => {
 				if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 			});
 		}
