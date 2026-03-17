@@ -106,6 +106,7 @@ const newGameState = {
 	newGame: true,
 	running: false,
 	gameId: 1,
+	tableEmpty: false,
 };
 
 class LetsPlayBingo extends Component {
@@ -205,6 +206,7 @@ class LetsPlayBingo extends Component {
 			newGame: true,
 			running: false,
 			gameId: 1,
+			tableEmpty: false,
 			interval: 0,
 			delay: 10000,
 			selectedCaller: null,
@@ -331,6 +333,7 @@ class LetsPlayBingo extends Component {
 			newGame: !!this.state.newGame,
 			running: !!this.state.running,
 			gameId: parseInt(this.state.gameId, 10) || 1,
+			tableEmpty: !!this.state.tableEmpty,
 			delay: parseInt(this.state.delay, 10) || 10000,
 			showAlert: !!this.state.showAlert,
 			ts: Date.now(),
@@ -385,6 +388,7 @@ class LetsPlayBingo extends Component {
 						newGame: typeof session.newGame === 'boolean' ? session.newGame : false,
 						running: false,
 						gameId: parseInt(session.gameId, 10) || 1,
+						tableEmpty: !!session.tableEmpty,
 						delay: parseInt(session.delay, 10) || 10000,
 						showAlert: !!session.showAlert,
 						showBackdrop: !!session.showAlert,
@@ -615,7 +619,35 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: resetBalls, newGame: true, running: false, gameId: (parseInt(this.state.gameId, 10) || 1) + 1 }, () => {
+		this.setState({ balls: resetBalls, newGame: true, running: false, gameId: (parseInt(this.state.gameId, 10) || 1) + 1, tableEmpty: false }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	clearTable = () => {
+		this.cancelSpeech();
+		if (this.state.running === true) {
+			clearInterval(this.state.interval);
+		}
+		let clearedBalls = this.state.balls;
+		_.map(clearedBalls, (ball, index) => {
+			clearedBalls[index].active = false;
+			clearedBalls[index].called = false;
+		});
+		if (this.state.showAlert === true) {
+			this.closeAlert();
+		}
+		this.pushLiveCallReset();
+		this.setState({ balls: clearedBalls, newGame: true, running: false, tableEmpty: true }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	setTable = () => {
+		if (this.state.showAlert === true) {
+			this.closeAlert();
+		}
+		this.setState({ tableEmpty: false }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -643,7 +675,7 @@ class LetsPlayBingo extends Component {
 		} else {
 			clearInterval(this.state.interval);
 		}
-		this.setState({ newGame: false, running: !this.state.running }, () => {
+		this.setState({ newGame: false, running: !this.state.running, tableEmpty: false }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -660,9 +692,10 @@ class LetsPlayBingo extends Component {
 			this.setState({
 				delay: e.target.value,
 				interval: setInterval(this.callNumber, e.target.value),
+				tableEmpty: false,
 			});
 		} else {
-			this.setState({ delay: e.target.value });
+			this.setState({ delay: e.target.value, tableEmpty: false });
 		}
 	};
 
@@ -720,7 +753,7 @@ class LetsPlayBingo extends Component {
 					: newBall.number,
 			]);
 			// update the state to re-render the board
-			this.setState({ balls: balls }, () => {
+			this.setState({ balls: balls, tableEmpty: false }, () => {
 				if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 			});
 		}
@@ -761,6 +794,8 @@ class LetsPlayBingo extends Component {
 					<p className="small-text">All of the bingo balls have been called!</p>
 					<p>
 						<button onClick={this.resetGame}>Reset</button> |{' '}
+						<button onClick={this.clearTable}>Clear Table</button> |{' '}
+						<button onClick={this.setTable}>Set Table</button> |{' '}
 						<button onClick={this.closeAlert}>Close</button>
 					</p>
 				</div>
@@ -808,6 +843,8 @@ class LetsPlayBingo extends Component {
 								Next Number
 							</button>
 							<button onClick={this.resetGame}>Reset</button>
+							<button onClick={this.clearTable}>Clear Table</button>
+							<button onClick={this.setTable}>Set Table</button>
 						</div>
 						<div className="col c40 text-center">
 							<div id="speed">
