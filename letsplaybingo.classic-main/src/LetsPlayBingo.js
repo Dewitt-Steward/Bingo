@@ -105,6 +105,7 @@ const newGameState = {
 	},
 	newGame: true,
 	running: false,
+	gameId: 1,
 };
 
 class LetsPlayBingo extends Component {
@@ -203,6 +204,7 @@ class LetsPlayBingo extends Component {
 			},
 			newGame: true,
 			running: false,
+			gameId: 1,
 			interval: 0,
 			delay: 10000,
 			selectedCaller: null,
@@ -328,6 +330,7 @@ class LetsPlayBingo extends Component {
 			balls: safeBalls,
 			newGame: !!this.state.newGame,
 			running: !!this.state.running,
+			gameId: parseInt(this.state.gameId, 10) || 1,
 			delay: parseInt(this.state.delay, 10) || 10000,
 			showAlert: !!this.state.showAlert,
 			ts: Date.now(),
@@ -381,6 +384,7 @@ class LetsPlayBingo extends Component {
 						balls: mergedBalls,
 						newGame: typeof session.newGame === 'boolean' ? session.newGame : false,
 						running: false,
+						gameId: parseInt(session.gameId, 10) || 1,
 						delay: parseInt(session.delay, 10) || 10000,
 						showAlert: !!session.showAlert,
 						showBackdrop: !!session.showAlert,
@@ -611,7 +615,7 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: resetBalls, newGame: true, running: false }, () => {
+		this.setState({ balls: resetBalls, newGame: true, running: false, gameId: (parseInt(this.state.gameId, 10) || 1) + 1 }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
