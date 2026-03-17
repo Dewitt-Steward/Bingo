@@ -327,7 +327,7 @@ class LetsPlayBingo extends Component {
 		return {
 			balls: safeBalls,
 			newGame: !!this.state.newGame,
-			running: false,
+			running: !!this.state.running,
 			delay: parseInt(this.state.delay, 10) || 10000,
 			showAlert: !!this.state.showAlert,
 			ts: Date.now(),
