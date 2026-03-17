@@ -216,7 +216,6 @@ class LetsPlayBingo extends Component {
 			if (host === 'dewitt-steward.github.io' && path.indexOf('/Bingo') === 0) {
 				skipCacheRestore = true;
 				localStorage.removeItem('lpbclassic');
-				localStorage.removeItem('lpbclassic_current_call');
 			}
 		} catch (e) {}
 
