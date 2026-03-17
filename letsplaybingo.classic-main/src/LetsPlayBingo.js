@@ -258,10 +258,12 @@ class LetsPlayBingo extends Component {
 		});
 		window.addEventListener('message', this.handleBridgeMessage);
 		setTimeout(this.notifyBridgeReady, 250);
+		this.bridgeInterval = setInterval(this.bridgeHeartbeat, 1000);
 	}
 
 	componentWillUnmount() {
 		window.removeEventListener('message', this.handleBridgeMessage);
+		if (this.bridgeInterval) clearInterval(this.bridgeInterval);
 	}
 
 	componentDidUpdate() {
@@ -413,6 +415,15 @@ class LetsPlayBingo extends Component {
 				window.opener.postMessage(payload, '*');
 			}
 		} catch (e) {}
+	};
+
+	bridgeHeartbeat = () => {
+		const active = _.where(this.state.balls, { active: true })[0];
+		if (active && active.letter && active.number) {
+			this.broadcastCurrentCall(active);
+			return;
+		}
+		this.notifyBridgeReady();
 	};
 
 	/*
