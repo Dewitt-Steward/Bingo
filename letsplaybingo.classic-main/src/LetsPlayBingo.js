@@ -253,6 +253,12 @@ class LetsPlayBingo extends Component {
 			unloadingTime = unloadingTime.getTime();
 			localStorage.setItem('lpb-unloadtime', JSON.stringify(unloadingTime));
 		});
+		window.addEventListener('message', this.handleBridgeMessage);
+		setTimeout(this.notifyBridgeReady, 250);
+	}
+
+	componentWillUnmount() {
+		window.removeEventListener('message', this.handleBridgeMessage);
 	}
 
 	componentDidUpdate() {
@@ -331,6 +337,69 @@ class LetsPlayBingo extends Component {
 		try {
 			localStorage.setItem('lpbclassic_current_call', JSON.stringify(payload));
 		} catch (e) {}
+		try {
+			if (window.parent && window.parent !== window) {
+				window.parent.postMessage(payload, '*');
+			}
+		} catch (e) {}
+		try {
+			if (window.opener && !window.opener.closed) {
+				window.opener.postMessage(payload, '*');
+			}
+		} catch (e) {}
+	};
+
+	handleBridgeMessage = (event) => {
+		let data = event ? event.data : null;
+		if (typeof data === 'string') {
+			try {
+				data = JSON.parse(data);
+			} catch (e) {
+				return;
+			}
+		}
+		if (!data || data.type !== 'LPB_REQUEST_CALL') return;
+
+		let payload = null;
+		try {
+			const raw = localStorage.getItem('lpbclassic_current_call');
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				if (parsed && parsed.letter && parsed.number) {
+					payload = {
+						type: 'LPB_CALL',
+						letter: parsed.letter,
+						number: parsed.number,
+						call: parsed.letter + '' + parsed.number,
+						ts: Date.now(),
+					};
+				}
+			}
+		} catch (e) {}
+
+		if (!payload) {
+			const active = _.where(this.state.balls, { active: true })[0];
+			if (active && active.letter && active.number) {
+				payload = {
+					type: 'LPB_CALL',
+					letter: active.letter,
+					number: active.number,
+					call: active.letter + '' + active.number,
+					ts: Date.now(),
+				};
+			}
+		}
+		if (!payload) return;
+
+		try {
+			if (event && event.source && typeof event.source.postMessage === 'function') {
+				event.source.postMessage(payload, '*');
+			}
+		} catch (e) {}
+	};
+
+	notifyBridgeReady = () => {
+		const payload = { type: 'LPB_READY', ts: Date.now() };
 		try {
 			if (window.parent && window.parent !== window) {
 				window.parent.postMessage(payload, '*');
