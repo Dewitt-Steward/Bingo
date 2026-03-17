@@ -338,6 +338,9 @@ class LetsPlayBingo extends Component {
 			localStorage.setItem('lpbclassic_current_call', JSON.stringify(payload));
 		} catch (e) {}
 		try {
+			window.name = 'LPB_CALL:' + payload.call;
+		} catch (e) {}
+		try {
 			if (window.parent && window.parent !== window) {
 				window.parent.postMessage(payload, '*');
 			}
@@ -400,6 +403,15 @@ class LetsPlayBingo extends Component {
 
 	notifyBridgeReady = () => {
 		const payload = { type: 'LPB_READY', ts: Date.now() };
+		try {
+			const cached = localStorage.getItem('lpbclassic_current_call');
+			if (cached) {
+				const parsed = JSON.parse(cached);
+				if (parsed && parsed.letter && parsed.number) {
+					window.name = 'LPB_CALL:' + parsed.letter + '' + parsed.number;
+				}
+			}
+		} catch (e) {}
 		try {
 			if (window.parent && window.parent !== window) {
 				window.parent.postMessage(payload, '*');
