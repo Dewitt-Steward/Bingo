@@ -218,11 +218,14 @@ class LetsPlayBingo extends Component {
 		try {
 			const host = String(window.location.hostname || '').toLowerCase();
 			const path = String(window.location.pathname || '');
+			const search = String(window.location.search || '');
+			this.isViewerMode = /(?:\?|&)viewer=1(?:&|$)/.test(search);
 			if (host === 'dewitt-steward.github.io' && path.indexOf('/Bingo') === 0) {
 				skipCacheRestore = true;
 				localStorage.removeItem('lpbclassic');
 			}
 		} catch (e) {}
+		if (typeof this.isViewerMode !== 'boolean') this.isViewerMode = false;
 		this.isSharedHost = skipCacheRestore;
 		this.sharedSessionLoaded = !skipCacheRestore;
 		this.applyingSharedSession = false;
@@ -282,12 +285,16 @@ class LetsPlayBingo extends Component {
 	componentDidMount() {
 		if (this.isSharedHost) {
 			this.loadSharedSession();
+			if (this.isViewerMode) {
+				this.sharedSessionPollInterval = setInterval(this.loadSharedSession, 1000);
+			}
 		}
 	}
 
 	componentWillUnmount() {
 		window.removeEventListener('message', this.handleBridgeMessage);
 		if (this.bridgeInterval) clearInterval(this.bridgeInterval);
+		if (this.sharedSessionPollInterval) clearInterval(this.sharedSessionPollInterval);
 	}
 
 	componentDidUpdate() {
@@ -298,7 +305,7 @@ class LetsPlayBingo extends Component {
 		delete stateCopy.synth;
 		delete stateCopy.voices;
 		localStorage.setItem('lpbclassic', JSON.stringify(stateCopy));
-		if (this.isSharedHost && this.sharedSessionLoaded && !this.applyingSharedSession) {
+		if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded && !this.applyingSharedSession) {
 			this.pushSharedSession();
 		}
 	}
@@ -379,14 +386,14 @@ class LetsPlayBingo extends Component {
 					() => {
 						this.applyingSharedSession = false;
 						this.sharedSessionLoaded = true;
-						this.pushSharedSession();
+						if (!this.isViewerMode) this.pushSharedSession();
 					}
 				);
 				return;
 			} catch (e) {}
 		}
 		this.sharedSessionLoaded = true;
-		this.pushSharedSession();
+		if (!this.isViewerMode) this.pushSharedSession();
 	};
 
 	/*
@@ -603,7 +610,7 @@ class LetsPlayBingo extends Component {
 		}
 		this.pushLiveCallReset();
 		this.setState({ balls: resetBalls, newGame: true, running: false }, () => {
-			if (this.isSharedHost && this.sharedSessionLoaded) this.pushSharedSession();
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
 
@@ -631,7 +638,7 @@ class LetsPlayBingo extends Component {
 			clearInterval(this.state.interval);
 		}
 		this.setState({ newGame: false, running: !this.state.running }, () => {
-			if (this.isSharedHost && this.sharedSessionLoaded) this.pushSharedSession();
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
 
@@ -708,7 +715,7 @@ class LetsPlayBingo extends Component {
 			]);
 			// update the state to re-render the board
 			this.setState({ balls: balls }, () => {
-				if (this.isSharedHost && this.sharedSessionLoaded) this.pushSharedSession();
+				if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 			});
 		}
 	};
