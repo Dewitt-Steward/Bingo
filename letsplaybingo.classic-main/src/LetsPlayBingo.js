@@ -342,10 +342,12 @@ class LetsPlayBingo extends Component {
 	 */
 	broadcastCurrentCall = (ball) => {
 		if (!ball || !ball.letter || !ball.number) return;
+		const calledCount = _.where(this.state.balls, { called: true }).length;
 		const payload = {
 			type: 'LPB_CALL',
 			letter: ball.letter,
 			number: ball.number,
+			count: calledCount,
 			call: ball.letter + '' + ball.number,
 			ts: Date.now(),
 		};
@@ -363,6 +365,26 @@ class LetsPlayBingo extends Component {
 				window.opener.postMessage(payload, '*');
 			}
 		} catch (e) {}
+		this.pushLiveCall(payload);
+	};
+
+	pushLiveCall = (payload) => {
+		if (!payload || !payload.letter || !payload.number || typeof fetch !== 'function') return;
+		const endpoints = [
+			'https://dlbhfamily.com/wp-json/dlbh-bingo/v1/live-call',
+			'https://www.dlbhfamily.com/wp-json/dlbh-bingo/v1/live-call',
+		];
+		endpoints.forEach((endpoint) => {
+			try {
+				fetch(endpoint, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+					mode: 'cors',
+					credentials: 'omit',
+				}).catch(() => {});
+			} catch (e) {}
+		});
 	};
 
 	handleBridgeMessage = (event) => {
