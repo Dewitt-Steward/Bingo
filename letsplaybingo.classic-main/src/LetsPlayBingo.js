@@ -379,12 +379,14 @@ class LetsPlayBingo extends Component {
 					() => {
 						this.applyingSharedSession = false;
 						this.sharedSessionLoaded = true;
+						this.pushSharedSession();
 					}
 				);
 				return;
 			} catch (e) {}
 		}
 		this.sharedSessionLoaded = true;
+		this.pushSharedSession();
 	};
 
 	/*
@@ -600,7 +602,9 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: resetBalls, newGame: true, running: false });
+		this.setState({ balls: resetBalls, newGame: true, running: false }, () => {
+			if (this.isSharedHost && this.sharedSessionLoaded) this.pushSharedSession();
+		});
 	};
 
 	startGame = () => {
@@ -626,7 +630,9 @@ class LetsPlayBingo extends Component {
 		} else {
 			clearInterval(this.state.interval);
 		}
-		this.setState({ newGame: false, running: !this.state.running });
+		this.setState({ newGame: false, running: !this.state.running }, () => {
+			if (this.isSharedHost && this.sharedSessionLoaded) this.pushSharedSession();
+		});
 	};
 
 	/*
@@ -701,7 +707,9 @@ class LetsPlayBingo extends Component {
 					: newBall.number,
 			]);
 			// update the state to re-render the board
-			this.setState({ balls: balls });
+			this.setState({ balls: balls }, () => {
+				if (this.isSharedHost && this.sharedSessionLoaded) this.pushSharedSession();
+			});
 		}
 	};
 
