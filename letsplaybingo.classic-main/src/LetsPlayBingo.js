@@ -277,9 +277,11 @@ class LetsPlayBingo extends Component {
 			unloadingTime = unloadingTime.getTime();
 			localStorage.setItem('lpb-unloadtime', JSON.stringify(unloadingTime));
 		});
-		window.addEventListener('message', this.handleBridgeMessage);
-		setTimeout(this.notifyBridgeReady, 250);
-		this.bridgeInterval = setInterval(this.bridgeHeartbeat, 1000);
+		if (!this.isViewerMode) {
+			window.addEventListener('message', this.handleBridgeMessage);
+			setTimeout(this.notifyBridgeReady, 250);
+			this.bridgeInterval = setInterval(this.bridgeHeartbeat, 1000);
+		}
 	}
 
 	componentDidMount() {
@@ -292,7 +294,7 @@ class LetsPlayBingo extends Component {
 	}
 
 	componentWillUnmount() {
-		window.removeEventListener('message', this.handleBridgeMessage);
+		if (!this.isViewerMode) window.removeEventListener('message', this.handleBridgeMessage);
 		if (this.bridgeInterval) clearInterval(this.bridgeInterval);
 		if (this.sharedSessionPollInterval) clearInterval(this.sharedSessionPollInterval);
 	}
