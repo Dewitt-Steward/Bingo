@@ -375,7 +375,7 @@ class LetsPlayBingo extends Component {
 	};
 
 	pushLiveCall = (payload) => {
-		if (!payload || !payload.letter || !payload.number || typeof fetch !== 'function') return;
+		if (!payload || typeof fetch !== 'function') return;
 		const endpoints = [
 			'https://dlbhfamily.com/wp-json/dlbh-bingo/v1/live-call',
 			'https://www.dlbhfamily.com/wp-json/dlbh-bingo/v1/live-call',
@@ -390,6 +390,20 @@ class LetsPlayBingo extends Component {
 					credentials: 'omit',
 				}).catch(() => {});
 			} catch (e) {}
+		});
+	};
+
+	pushLiveCallReset = () => {
+		try {
+			localStorage.removeItem('lpbclassic_current_call');
+		} catch (e) {}
+		this.pushLiveCall({
+			active: false,
+			letter: '',
+			number: '',
+			count: 0,
+			called_numbers: [],
+			ts: Date.now(),
 		});
 	};
 
@@ -463,6 +477,7 @@ class LetsPlayBingo extends Component {
 			this.broadcastCurrentCall(active);
 			return;
 		}
+		this.pushLiveCallReset();
 		this.notifyBridgeReady();
 	};
 
@@ -484,6 +499,7 @@ class LetsPlayBingo extends Component {
 		if (this.state.showAlert === true) {
 			this.closeAlert();
 		}
+		this.pushLiveCallReset();
 		this.setState({ balls: resetBalls, newGame: true, running: false });
 	};
 
