@@ -342,12 +342,18 @@ class LetsPlayBingo extends Component {
 	 */
 	broadcastCurrentCall = (ball) => {
 		if (!ball || !ball.letter || !ball.number) return;
-		const calledCount = _.where(this.state.balls, { called: true }).length;
+		const calledBalls = _.where(this.state.balls, { called: true });
+		const calledCount = calledBalls.length;
+		const calledNumbers = calledBalls
+			.map((item) => parseInt(item.number, 10))
+			.filter((item) => !isNaN(item))
+			.sort((a, b) => a - b);
 		const payload = {
 			type: 'LPB_CALL',
 			letter: ball.letter,
 			number: ball.number,
 			count: calledCount,
+			called_numbers: calledNumbers,
 			call: ball.letter + '' + ball.number,
 			ts: Date.now(),
 		};
