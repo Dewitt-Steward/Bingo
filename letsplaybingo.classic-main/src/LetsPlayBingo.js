@@ -209,7 +209,18 @@ class LetsPlayBingo extends Component {
 		if (this.state.speechEnabled) {
 			this.state.synth.onvoiceschanged = this.loadVoices;
 		}
-		const cache = JSON.parse(localStorage.getItem('lpbclassic'));
+		let skipCacheRestore = false;
+		try {
+			const host = String(window.location.hostname || '').toLowerCase();
+			const path = String(window.location.pathname || '');
+			if (host === 'dewitt-steward.github.io' && path.indexOf('/Bingo') === 0) {
+				skipCacheRestore = true;
+				localStorage.removeItem('lpbclassic');
+				localStorage.removeItem('lpbclassic_current_call');
+			}
+		} catch (e) {}
+
+		const cache = skipCacheRestore ? null : JSON.parse(localStorage.getItem('lpbclassic'));
 		if (cache) {
 			if (Object.keys(cache).length > 0) {
 				// there's a cache available, apply to this.state
