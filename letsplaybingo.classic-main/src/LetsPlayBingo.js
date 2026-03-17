@@ -477,6 +477,9 @@ class LetsPlayBingo extends Component {
 			this.broadcastCurrentCall(active);
 			return;
 		}
+		if (this.state.running || this.state.newGame === false) {
+			return;
+		}
 		this.pushLiveCallReset();
 		this.notifyBridgeReady();
 	};
