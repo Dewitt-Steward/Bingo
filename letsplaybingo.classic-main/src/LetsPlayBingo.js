@@ -20,6 +20,11 @@ import BallDisplay from './components/BallDisplay.js';
 // Helpers
 import { getLanguageText } from './helpers.js';
 
+const SHARED_BINGO_ENDPOINTS = [
+	'https://dlbhfamily.com/wp-json/dlbh-bingo/v1',
+	'https://www.dlbhfamily.com/wp-json/dlbh-bingo/v1',
+];
+
 const newGameState = {
 	balls: {
 		1: { letter: 'B', number: 1, called: false, active: false },
@@ -218,6 +223,9 @@ class LetsPlayBingo extends Component {
 				localStorage.removeItem('lpbclassic');
 			}
 		} catch (e) {}
+		this.isSharedHost = skipCacheRestore;
+		this.sharedSessionLoaded = !skipCacheRestore;
+		this.applyingSharedSession = false;
 
 		const cache = skipCacheRestore ? null : JSON.parse(localStorage.getItem('lpbclassic'));
 		if (cache) {
@@ -271,6 +279,12 @@ class LetsPlayBingo extends Component {
 		this.bridgeInterval = setInterval(this.bridgeHeartbeat, 1000);
 	}
 
+	componentDidMount() {
+		if (this.isSharedHost) {
+			this.loadSharedSession();
+		}
+	}
+
 	componentWillUnmount() {
 		window.removeEventListener('message', this.handleBridgeMessage);
 		if (this.bridgeInterval) clearInterval(this.bridgeInterval);
@@ -284,7 +298,94 @@ class LetsPlayBingo extends Component {
 		delete stateCopy.synth;
 		delete stateCopy.voices;
 		localStorage.setItem('lpbclassic', JSON.stringify(stateCopy));
+		if (this.isSharedHost && this.sharedSessionLoaded && !this.applyingSharedSession) {
+			this.pushSharedSession();
+		}
 	}
+
+	buildSharedSessionState = () => {
+		const safeBalls = {};
+		Object.keys(this.state.balls || {}).forEach((key) => {
+			const ball = this.state.balls[key];
+			if (!ball) return;
+			safeBalls[key] = {
+				letter: ball.letter,
+				number: ball.number,
+				called: !!ball.called,
+				active: !!ball.active,
+			};
+		});
+		return {
+			balls: safeBalls,
+			newGame: !!this.state.newGame,
+			running: false,
+			delay: parseInt(this.state.delay, 10) || 10000,
+			showAlert: !!this.state.showAlert,
+			ts: Date.now(),
+		};
+	};
+
+	pushSharedSession = () => {
+		if (typeof fetch !== 'function') return;
+		const payload = this.buildSharedSessionState();
+		SHARED_BINGO_ENDPOINTS.forEach((baseUrl) => {
+			try {
+				fetch(baseUrl + '/session', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+					mode: 'cors',
+					credentials: 'omit',
+				}).catch(() => {});
+			} catch (e) {}
+		});
+	};
+
+	loadSharedSession = async () => {
+		if (typeof fetch !== 'function') {
+			this.sharedSessionLoaded = true;
+			return;
+		}
+		for (let i = 0; i < SHARED_BINGO_ENDPOINTS.length; i++) {
+			try {
+				const response = await fetch(SHARED_BINGO_ENDPOINTS[i] + '/session', {
+					method: 'GET',
+					mode: 'cors',
+					credentials: 'omit',
+					cache: 'no-store',
+				});
+				if (!response.ok) continue;
+				const session = await response.json();
+				if (!session || typeof session !== 'object' || !session.balls) continue;
+				const mergedBalls = JSON.parse(JSON.stringify(newGameState.balls));
+				Object.keys(session.balls || {}).forEach((key) => {
+					if (!mergedBalls[key] || !session.balls[key]) return;
+					mergedBalls[key] = {
+						...mergedBalls[key],
+						called: !!session.balls[key].called,
+						active: !!session.balls[key].active,
+					};
+				});
+				this.applyingSharedSession = true;
+				this.setState(
+					{
+						balls: mergedBalls,
+						newGame: typeof session.newGame === 'boolean' ? session.newGame : false,
+						running: false,
+						delay: parseInt(session.delay, 10) || 10000,
+						showAlert: !!session.showAlert,
+						showBackdrop: !!session.showAlert,
+					},
+					() => {
+						this.applyingSharedSession = false;
+						this.sharedSessionLoaded = true;
+					}
+				);
+				return;
+			} catch (e) {}
+		}
+		this.sharedSessionLoaded = true;
+	};
 
 	/*
 	 *  Load Voices Function
