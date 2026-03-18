@@ -1013,7 +1013,8 @@ class LetsPlayBingo extends Component {
 		const ballList = Object.keys(this.state.balls || {}).map((key) => this.state.balls[key]).filter(Boolean);
 		const activeBall = ballList.find((ball) => ball && ball.active) || null;
 		const showIdleTable = tableViewState !== 'board';
-		const showHostButton = tableViewState === 'closed' && this.state.accessCodeVerified;
+		const showHostButton = true;
+		const disableHostButton = tableViewState === 'closed' && !this.state.accessCodeVerified;
 		const showHostedOnlyControls = this.state.playPhase === 'hosted';
 		const showOnDeckControls =
 			tableViewState === 'board' &&
@@ -1205,69 +1206,18 @@ class LetsPlayBingo extends Component {
 								</div>
 							) : null}
 							{showHostButton ? (
-								<button className="lpb-btn lpb-btn-host" onClick={this.handleOpenTable}>Host</button>
+								<button className="lpb-btn lpb-btn-host" onClick={this.handleOpenTable} disabled={disableHostButton}>Host</button>
 							) : null}
-							{showHostedOnlyControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-open-table" onClick={this.handleTableOpen}>Open Table</button>
-									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
-								</>
-							) : null}
-							{showOnDeckControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
-									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
-								</>
-							) : null}
-							{showReadyControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-open" onClick={this.handleOpenPlay}>Open Play</button>
-									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
-								</>
-							) : null}
-							{showActiveControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
-									<button className="lpb-btn lpb-btn-next" onClick={this.handleCallNextBall}>Call Next Ball</button>
-								</>
-							) : null}
-							{showPausedControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-resume" onClick={this.handleResumeDraw}>Resume Draw</button>
-									<button className="lpb-btn lpb-btn-reset" onClick={this.handleBingo}>Bingo</button>
-									<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button>
-								</>
-							) : null}
-							{showBingoControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-reset" onClick={this.handleLoadNextSet}>Load Next Set</button>
-									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
-								</>
-							) : null}
-							{showClearedControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
-									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
-								</>
-							) : null}
-							{showFullBoardControls ? (
-								<>
-									<button className="lpb-btn lpb-btn-open" onClick={this.handleOpenPlay}>Open Play</button>
-									<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
-									<button className="lpb-btn lpb-btn-resume" onClick={this.handleResumeDraw}>Resume Draw</button>
-									<button className="lpb-btn lpb-btn-open-table" onClick={this.handleTableOpen}>Open Table</button>
-									<button
-										className="lpb-btn lpb-btn-next"
-										onClick={this.handleCallNextBall}
-										disabled={this.state.running ? 'disabled' : ''}
-									>
-										Call Next Ball
-									</button>
-									<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button>
-									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
-									<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
-								</>
-							) : null}
+							<button className="lpb-btn lpb-btn-open-table" onClick={this.handleTableOpen}>Open Table</button>
+							<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
+							<button className="lpb-btn lpb-btn-open" onClick={this.handleOpenPlay}>Open Play</button>
+							<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
+							<button className="lpb-btn lpb-btn-resume" onClick={this.handleResumeDraw}>Resume Draw</button>
+							<button className="lpb-btn lpb-btn-next" onClick={this.handleCallNextBall}>Call Next Ball</button>
+							<button className="lpb-btn lpb-btn-reset" onClick={this.handleBingo}>Bingo</button>
+							<button className="lpb-btn lpb-btn-reset" onClick={this.handleLoadNextSet}>Load Next Set</button>
+							<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button>
+							<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
 						</div>
 					</div>
 				</section>
