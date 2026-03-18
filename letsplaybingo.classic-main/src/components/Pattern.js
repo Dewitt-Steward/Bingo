@@ -6,7 +6,6 @@
  */
 import React from "react";
 import _ from "underscore";
-import Select from "react-select";
 
 class Pattern extends React.Component {
 	constructor(props) {
@@ -21,13 +20,6 @@ class Pattern extends React.Component {
 				O: [false, false, false, false, false],
 			},
 			presets: {
-				Custom: {
-					B: [false, false, false, false, false],
-					I: [false, false, false, false, false],
-					N: [false, false, false, false, false],
-					G: [false, false, false, false, false],
-					O: [false, false, false, false, false],
-				},
 				"6 Pack As Shown": {
 					B: [true, true, false, false, false],
 					I: [true, true, false, false, false],
@@ -571,7 +563,8 @@ class Pattern extends React.Component {
 	 *  Sets to default if no pattern is selected or selection is cleared.
 	 */
 	choosePattern = (e) => {
-		if (e === null) {
+		const selectedValue = e && e.target ? e.target.value : (e ? e.value : '');
+		if (!selectedValue) {
 			this.setState({
 				selected: null,
 				pattern: {
@@ -584,30 +577,20 @@ class Pattern extends React.Component {
 			});
 		} else {
 			this.setState({
-				selected: e.value,
-				pattern: this.state.presets[e.value],
+				selected: selectedValue,
+				pattern: this.state.presets[selectedValue],
 			});
 		}
 	};
 
 	/*
-	 *  Update Pattern Function
-	 *  As user clicks on slots for the pattern, update the pattern in the state
-	 */
-	updatePattern = (letter, index, slot) => {
-		let pattern = this.state.pattern;
-		pattern[letter][index] = !slot;
-		this.setState({ selected: "Custom", pattern: pattern });
-	};
-
-	/*
 	 *  Render Pattern Function
-	 *  This will display a bingo card where the user can create their own pattern
+	 *  This will display a bingo card for the selected preset pattern
 	 *  Or choose a pattern from the searchable drop down
 	 */
 	render() {
 		let pattern = this.state.pattern;
-		let patternArray = [_.map(this.state.presets, (preset, value) => ({ value: value, label: value }))];
+		let patternArray = _.map(this.state.presets, (preset, value) => ({ value: value, label: value }));
 
 		return (
 			<div id="bingopattern" className="notranslate">
@@ -617,23 +600,22 @@ class Pattern extends React.Component {
 						{_.map(column, (slot, index) => (
 							<div
 								key={letter + index}
-								className={slot ? "selected pattern-slot" : "pattern-slot"}
-								onClick={(e) => this.updatePattern(letter, index, slot)}>
+								className={slot ? "selected pattern-slot" : "pattern-slot"}>
 								&nbsp;
 							</div>
 						))}
 					</div>
 				))}
-				<Select
+				<select
 					name="patternselect"
-					placeholder="Choose Pattern"
-					value={this.state.selected}
-					searchable
-					onBlurResetsInput={true}
-					clearable
-					onChange={this.choosePattern}
-					options={patternArray[0]}
-				/>
+					className="pattern-select"
+					value={this.state.selected || ''}
+					onChange={this.choosePattern}>
+					<option value="" disabled>Choose Pattern</option>
+					{patternArray.map((option) => (
+						<option key={option.value} value={option.value}>{option.label}</option>
+					))}
+				</select>
 			</div>
 		);
 	}

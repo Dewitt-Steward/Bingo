@@ -6,24 +6,34 @@
  */
 import React, { Component } from 'react';
 import _ from 'underscore';
-import Select from 'react-select';
 // Styles and Images
 import logo from './logo.svg';
 import venmo from './images/venmo.jpeg';
 import paypal from './images/paypalme.jpeg';
 import buyacoffee from './images/buyacoffee.png';
-import 'react-select/dist/react-select.css';
 // Components
 import BingoBoard from './components/BingoBoard.js';
 import Pattern from './components/Pattern.js';
 import BallDisplay from './components/BallDisplay.js';
-// Helpers
-import { getLanguageText } from './helpers.js';
+import SevenSegmentText from './components/SevenSegmentText.js';
 
 const SHARED_BINGO_ENDPOINTS = [
 	'https://dlbhfamily.com/wp-json/dlbh-bingo/v1',
 	'https://www.dlbhfamily.com/wp-json/dlbh-bingo/v1',
 ];
+
+function getCentralDateAccessCode() {
+	const parts = new Intl.DateTimeFormat('en-US', {
+		timeZone: 'America/Chicago',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+	}).formatToParts(new Date());
+	const month = parts.find((part) => part.type === 'month')?.value || '';
+	const day = parts.find((part) => part.type === 'day')?.value || '';
+	const year = parts.find((part) => part.type === 'year')?.value || '';
+	return `${month}${day}${year}`;
+}
 
 const newGameState = {
 	balls: {
@@ -107,6 +117,10 @@ const newGameState = {
 	running: false,
 	gameId: 1,
 	tableEmpty: false,
+	tableOpen: false,
+	tableOpening: false,
+	playPhase: 'idle',
+	callHistory: [],
 	sessionAction: 'reset',
 };
 
@@ -126,7 +140,13 @@ class LetsPlayBingo extends Component {
 
 		this.state = {
 			showAlert: false,
+			showConfirm: false,
 			showBackdrop: false,
+			confirmTitle: '',
+			confirmMessage: '',
+			confirmButtonText: 'Confirm',
+			accessCodeInput: '',
+			accessCodeVerified: false,
 			balls: {
 				1: { letter: 'B', number: 1, called: false, active: false },
 				2: { letter: 'B', number: 2, called: false, active: false },
@@ -208,18 +228,15 @@ class LetsPlayBingo extends Component {
 			running: false,
 			gameId: 1,
 			tableEmpty: false,
+			tableOpen: false,
+			tableOpening: false,
+			playPhase: 'idle',
+			callHistory: [],
 			sessionAction: 'reset',
 			interval: 0,
 			delay: 10000,
-			selectedCaller: null,
-			speechEnabled: window.hasOwnProperty('speechSynthesis'),
-			synth: window.speechSynthesis,
-			voices: [],
 		};
-		// if speech is enabled, set up a method to load voices if they change
-		if (this.state.speechEnabled) {
-			this.state.synth.onvoiceschanged = this.loadVoices;
-		}
+		this.pendingConfirmAction = null;
 		let skipCacheRestore = false;
 		try {
 			const host = String(window.location.hostname || '').toLowerCase();
@@ -244,9 +261,6 @@ class LetsPlayBingo extends Component {
 					'showAlert',
 					'showBackdrop',
 					'running',
-					'speechEnabled',
-					'synth',
-					'voices',
 				];
 				Object.keys(cache).forEach((key) => {
 					if (!ignoredKeys.includes(key)) {
@@ -303,15 +317,13 @@ class LetsPlayBingo extends Component {
 		if (!this.isViewerMode) window.removeEventListener('message', this.handleBridgeMessage);
 		if (this.bridgeInterval) clearInterval(this.bridgeInterval);
 		if (this.sharedSessionPollInterval) clearInterval(this.sharedSessionPollInterval);
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
 	}
 
 	componentDidUpdate() {
 		let stateCopy = { ...this.state };
 		delete stateCopy.showAlert;
 		delete stateCopy.showBackdrop;
-		delete stateCopy.speechEnabled;
-		delete stateCopy.synth;
-		delete stateCopy.voices;
 		localStorage.setItem('lpbclassic', JSON.stringify(stateCopy));
 		if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded && !this.applyingSharedSession) {
 			this.pushSharedSession();
@@ -336,6 +348,10 @@ class LetsPlayBingo extends Component {
 			running: !!this.state.running,
 			gameId: parseInt(this.state.gameId, 10) || 1,
 			tableEmpty: !!this.state.tableEmpty,
+			tableOpen: !!this.state.tableOpen,
+			tableOpening: !!this.state.tableOpening,
+			playPhase: this.state.playPhase || 'idle',
+			callHistory: Array.isArray(this.state.callHistory) ? this.state.callHistory.slice(-75) : [],
 			sessionAction: this.state.sessionAction || 'play',
 			delay: parseInt(this.state.delay, 10) || 10000,
 			showAlert: !!this.state.showAlert,
@@ -392,6 +408,10 @@ class LetsPlayBingo extends Component {
 						running: false,
 						gameId: parseInt(session.gameId, 10) || 1,
 						tableEmpty: !!session.tableEmpty,
+						tableOpen: !!session.tableOpen,
+						tableOpening: !!session.tableOpening,
+						playPhase: session.playPhase || 'idle',
+						callHistory: Array.isArray(session.callHistory) ? session.callHistory.slice(-75) : [],
 						sessionAction: session.sessionAction || 'play',
 						delay: parseInt(session.delay, 10) || 10000,
 						showAlert: !!session.showAlert,
@@ -410,55 +430,9 @@ class LetsPlayBingo extends Component {
 		if (!this.isViewerMode) this.pushSharedSession();
 	};
 
-	/*
-	 *  Load Voices Function
-	 *  Will load voices as they change within the browser
-	 */
-	loadVoices = () => {
-		const voices = this.state.synth.getVoices();
-		const currentValue = this.state.selectedCaller;
-		let selectedCaller = null;
-		if (
-			currentValue &&
-			currentValue.hasOwnProperty('value') &&
-			!currentValue.hasOwnProperty('name')
-		) {
-			voices.map((voice, index) => {
-				voice.value = index;
-				if (index === currentValue.value) {
-					selectedCaller = voice;
-				}
-				return voice;
-			});
-		}
-		this.setState({ voices, selectedCaller });
-	};
+	say = () => {};
 
-	/*
-	 *  Say Function
-	 *  Will speak any string that is passed in
-	 */
-	say = (text) => {
-		if (this.state.speechEnabled) {
-			// Create a new instance of SpeechSynthesisUtterance.
-			let msg = new SpeechSynthesisUtterance();
-			msg.text = text;
-			if (
-				this.state.selectedCaller &&
-				this.state.selectedCaller.hasOwnProperty('value')
-			) {
-				msg.voice = this.state.selectedCaller;
-			}
-			this.cancelSpeech();
-			this.state.synth.speak(msg);
-		}
-	};
-
-	cancelSpeech = () => {
-		if (window.speechSynthesis.speaking) {
-			window.speechSynthesis.cancel();
-		}
-	};
+	cancelSpeech = () => {};
 
 	/*
 	 *  Broadcast current called ball so external pages (like bingo.php Play)
@@ -623,9 +597,52 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: resetBalls, newGame: true, running: false, gameId: (parseInt(this.state.gameId, 10) || 1) + 1, tableEmpty: false, sessionAction: 'reset' }, () => {
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.setState({ balls: resetBalls, newGame: true, running: false, interval: 0, gameId: (parseInt(this.state.gameId, 10) || 1) + 1, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'ready', callHistory: [], sessionAction: 'load_next_set' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
+	};
+
+	confirmAction = (title, message, action, buttonText = 'Confirm') => {
+		this.pendingConfirmAction = action;
+		document.body.classList.add('backdrop-visible');
+		this.setState({
+			showConfirm: true,
+			showBackdrop: true,
+			confirmTitle: title,
+			confirmMessage: message,
+			confirmButtonText: buttonText,
+		});
+	};
+
+	closeConfirm = () => {
+		this.pendingConfirmAction = null;
+		document.body.classList.remove('backdrop-visible');
+		this.setState({
+			showConfirm: false,
+			showBackdrop: false,
+			confirmTitle: '',
+			confirmMessage: '',
+			confirmButtonText: 'Confirm',
+		});
+	};
+
+	proceedConfirm = () => {
+		const action = this.pendingConfirmAction;
+		this.pendingConfirmAction = null;
+		document.body.classList.remove('backdrop-visible');
+		this.setState(
+			{
+				showConfirm: false,
+				showBackdrop: false,
+				confirmTitle: '',
+				confirmMessage: '',
+				confirmButtonText: 'Confirm',
+			},
+			() => {
+				if (typeof action === 'function') action();
+			}
+		);
 	};
 
 	clearTable = () => {
@@ -642,8 +659,69 @@ class LetsPlayBingo extends Component {
 			this.closeAlert();
 		}
 		this.pushLiveCallReset();
-		this.setState({ balls: clearedBalls, newGame: true, running: false, tableEmpty: true, sessionAction: 'clear_table' }, () => {
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.setState({ balls: clearedBalls, newGame: true, running: false, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'cleared', callHistory: [], sessionAction: 'clear_felt' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	closeTable = () => {
+		this.cancelSpeech();
+		if (this.state.running === true) {
+			clearInterval(this.state.interval);
+		}
+		let closedBalls = this.state.balls;
+		_.map(closedBalls, (ball, index) => {
+			closedBalls[index].active = false;
+			closedBalls[index].called = false;
+		});
+		if (this.state.showAlert === true) {
+			this.closeAlert();
+		}
+		this.pushLiveCallReset();
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.setState({ balls: closedBalls, newGame: true, running: false, tableEmpty: true, tableOpen: false, tableOpening: false, playPhase: 'idle', callHistory: [], sessionAction: 'close_table', accessCodeInput: '', accessCodeVerified: false }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	hostTable = () => {
+		this.cancelSpeech();
+		if (this.state.running === true) {
+			clearInterval(this.state.interval);
+		}
+		let openedBalls = this.state.balls;
+		_.map(openedBalls, (ball, index) => {
+			openedBalls[index].active = false;
+			openedBalls[index].called = false;
+		});
+		if (this.state.showAlert === true) {
+			this.closeAlert();
+		}
+		this.pushLiveCallReset();
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.setState({ balls: openedBalls, newGame: true, running: false, tableEmpty: true, tableOpen: true, tableOpening: false, playPhase: 'hosted', callHistory: [], sessionAction: 'host_table' }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	openTable = () => {
+		this.cancelSpeech();
+		if (this.state.running === true) {
+			clearInterval(this.state.interval);
+		}
+		if (this.state.showAlert === true) {
+			this.closeAlert();
+		}
+		this.pushLiveCallReset();
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.setState({ tableEmpty: true, tableOpen: true, tableOpening: true, running: false, newGame: true, playPhase: 'opening', callHistory: [], sessionAction: 'open_table' }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+			this.tableOpeningTimeout = setTimeout(() => {
+				this.setState({ tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'on_deck', callHistory: [], sessionAction: 'open_table_ready' }, () => {
+					if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+				});
+			}, 10000);
 		});
 	};
 
@@ -651,8 +729,116 @@ class LetsPlayBingo extends Component {
 		if (this.state.showAlert === true) {
 			this.closeAlert();
 		}
-		this.setState({ tableEmpty: false, sessionAction: 'set_table' }, () => {
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.setState({ tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'ready', callHistory: [], sessionAction: 'set_table' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	handleOpenTable = () => {
+		this.confirmAction(
+			'Host',
+			'Open the table and make the host present before live play begins. The table will remain open until the round is started, cleared, or the next set is loaded. Confirm to continue.',
+			this.hostTable,
+			'Host'
+		);
+	};
+
+	handleTableOpen = () => {
+		this.confirmAction(
+			'Open Table',
+			'Open the table for players and begin the join process before the board goes live. Confirm to continue.',
+			this.openTable,
+			'Open Table'
+		);
+	};
+
+	handleOpenPlay = () => {
+		this.confirmAction(
+			'Open Play',
+			'Open live play for the card set now on the table. Table and set changes will remain locked until the round is stopped or closed. Confirm to continue.',
+			this.startGame,
+			'Open Play'
+		);
+	};
+
+	handleHoldDraw = () => {
+		this.confirmAction(
+			'Hold Draw',
+			'Place the live draw on hold for the current round. The table will stay locked in its current state until play resumes. Confirm to continue.',
+			this.pauseGame,
+			'Hold Draw'
+		);
+	};
+
+	handleResumeDraw = () => {
+		this.confirmAction(
+			'Resume Draw',
+			'Resume the live draw and continue the current round. Table and set changes will remain restricted during live play. Confirm to continue.',
+			this.resumeGame,
+			'Resume Draw'
+		);
+	};
+
+	handleCallNextBall = () => {
+		this.confirmAction(
+			'Call Next Ball',
+			'Call the next ball while no live round is in play. This will update the board state. Confirm to continue.',
+			this.callNumber,
+			'Call Next Ball'
+		);
+	};
+
+	handleLoadNextSet = () => {
+		this.confirmAction(
+			'Load Next Set',
+			'Close the current table, reset the board, and load the next available card set for play. Use only after the round is closed or cleared. Confirm to continue.',
+			this.resetGame,
+			'Load Next Set'
+		);
+	};
+
+	handleBingo = () => {
+		this.confirmAction(
+			'Bingo',
+			'Close the current round on a bingo call and move the table into its post-win state. Confirm to continue.',
+			this.callBingo,
+			'Bingo'
+		);
+	};
+
+	handleClearFelt = () => {
+		this.confirmAction(
+			'Clear Felt',
+			'Clear all cards from the table and remove the current play setup. Use only when live play is not active. Confirm to continue.',
+			this.clearTable,
+			'Clear Felt'
+		);
+	};
+
+	handleCloseTable = () => {
+		this.confirmAction(
+			'Close Table',
+			'Close the table and return to the closed state. No game will remain in session until the table is hosted or opened again. Confirm to continue.',
+			this.closeTable,
+			'Close Table'
+		);
+	};
+
+	handleSetTable = () => {
+		this.confirmAction(
+			'Set the Felt',
+			'Load the next eligible card set to the table and make it live for play. Only one live set can be on the table at a time. Confirm to continue.',
+			this.setTable,
+			'Set the Felt'
+		);
+	};
+
+	handleAccessCodeChange = (event) => {
+		const digitsOnly = String(event.target.value || '').replace(/\D/g, '').slice(0, 8);
+		this.setState({
+			accessCodeInput: digitsOnly,
+			accessCodeVerified: digitsOnly === getCentralDateAccessCode(),
 		});
 	};
 
@@ -660,26 +846,46 @@ class LetsPlayBingo extends Component {
 		if (this.state.newGame) {
 			this.say("Let's Play Bingo!");
 		}
-		setTimeout(this.toggleGame, 1500);
-	};
-
-	/*
-	 *  Toggle Game Function
-	 *  Check the opposite of the current running state, this will determine our new state
-	 *  If the game is now running, call a number right away then set a new interval
-	 *  Otherwise, clear the interval
-	 *  Set the current running state
-	 */
-	toggleGame = () => {
-		if (!this.state.running === true) {
-			this.callNumber();
-			this.setState({
-				interval: setInterval(this.callNumber, this.state.delay),
-			});
-		} else {
+		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		if (this.state.interval) {
 			clearInterval(this.state.interval);
 		}
-		this.setState({ newGame: false, running: !this.state.running, tableEmpty: false, sessionAction: 'play' }, () => {
+		const nextInterval = setInterval(this.callNumber, this.state.delay);
+		this.setState({ newGame: false, running: true, interval: nextInterval, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'active', sessionAction: 'open_play' }, () => {
+			this.callNumber();
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	callBingo = () => {
+		this.cancelSpeech();
+		if (this.state.running === true) {
+			clearInterval(this.state.interval);
+		}
+		let bingoBalls = this.state.balls;
+		_.map(bingoBalls, (ball, index) => {
+			bingoBalls[index].active = false;
+		});
+		this.setState({ balls: bingoBalls, newGame: true, running: false, interval: 0, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'bingo', sessionAction: 'bingo' }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	pauseGame = () => {
+		if (this.state.interval) {
+			clearInterval(this.state.interval);
+		}
+		this.setState({ newGame: false, running: false, interval: 0, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'paused', sessionAction: 'hold_draw' }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
+	};
+
+	resumeGame = () => {
+		if (this.state.interval) {
+			clearInterval(this.state.interval);
+		}
+		const nextInterval = setInterval(this.callNumber, this.state.delay);
+		this.setState({ newGame: false, running: true, interval: nextInterval, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'active', sessionAction: 'resume_draw' }, () => {
 			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
@@ -697,24 +903,13 @@ class LetsPlayBingo extends Component {
 				delay: e.target.value,
 				interval: setInterval(this.callNumber, e.target.value),
 				tableEmpty: false,
-				sessionAction: 'play',
+				tableOpen: true,
+				tableOpening: false,
+				playPhase: this.state.playPhase || 'active',
+				sessionAction: this.state.sessionAction || 'resume_draw',
 			});
 		} else {
-			this.setState({ delay: e.target.value, tableEmpty: false, sessionAction: 'play' });
-		}
-	};
-
-	/*
-	 *  Choose Caller Function
-	 */
-	chooseCaller = (e) => {
-		if (e === null) {
-			// default
-			this.setState({ selectedCaller: this.state.voices[0] });
-		} else {
-			let voice = this.state.voices[e.value];
-			voice.value = e.value;
-			this.setState({ selectedCaller: voice });
+			this.setState({ delay: e.target.value, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: this.state.playPhase || 'ready', sessionAction: this.state.sessionAction || 'set_table' });
 		}
 	};
 
@@ -758,9 +953,12 @@ class LetsPlayBingo extends Component {
 					: newBall.number,
 			]);
 			// update the state to re-render the board
-			this.setState({ balls: balls, tableEmpty: false, sessionAction: 'play' }, () => {
-				if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-			});
+		const nextCallHistory = (Array.isArray(this.state.callHistory) ? this.state.callHistory : []).concat([
+			{ letter: newBall.letter, number: newBall.number },
+		]).slice(-75);
+		this.setState({ balls: balls, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: this.state.playPhase || 'active', callHistory: nextCallHistory, sessionAction: this.state.running ? (this.state.sessionAction || 'resume_draw') : (this.state.sessionAction || 'call_next_ball') }, () => {
+			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+		});
 		}
 	};
 
@@ -779,18 +977,102 @@ class LetsPlayBingo extends Component {
 		return this.state.showBackdrop ? 'show' : 'hide';
 	}
 	get alertClasses() {
-		return this.state.showBackdrop ? 'show text-center' : 'hide';
+		return this.state.showAlert ? 'show text-center' : 'hide';
+	}
+	get confirmClasses() {
+		return this.state.showConfirm ? 'show text-center' : 'hide';
 	}
 
 	get year() {
 		return new Date().getFullYear();
 	}
 
+	getTableViewState = () => {
+		const balls = this.state.balls || {};
+		const hasCalledBall = Object.keys(balls).some((key) => {
+			const ball = balls[key];
+			return ball && (ball.called || ball.active);
+		});
+		if (!!this.state.tableOpening) return 'opening';
+		if (!!this.state.tableOpen && !!this.state.tableEmpty) return 'open';
+		if (!!this.state.tableOpen && !this.state.tableEmpty) return 'board';
+		if (!!this.state.tableEmpty || (!this.state.running && !!this.state.newGame && !hasCalledBall)) {
+			return 'closed';
+		}
+		return 'board';
+	};
+
 	/*
 	 *  Render Method
 	 *  Displays the bingo page
 	 */
 	render() {
+		const tableViewState = this.getTableViewState();
+		const showAccessCodeGate = tableViewState === 'closed' && !this.state.accessCodeVerified;
+		const showAccessDenied = showAccessCodeGate && this.state.accessCodeInput.length === 8;
+		const ballList = Object.keys(this.state.balls || {}).map((key) => this.state.balls[key]).filter(Boolean);
+		const activeBall = ballList.find((ball) => ball && ball.active) || null;
+		const showIdleTable = tableViewState !== 'board';
+		const showHostButton = tableViewState === 'closed' && this.state.accessCodeVerified;
+		const showHostedOnlyControls = this.state.playPhase === 'hosted';
+		const showOnDeckControls =
+			tableViewState === 'board' &&
+			!this.state.running &&
+			this.state.playPhase === 'on_deck';
+		const showReadyControls =
+			tableViewState === 'board' &&
+			!this.state.running &&
+			this.state.playPhase === 'ready';
+		const showActiveControls =
+			tableViewState === 'board' &&
+			this.state.running &&
+			this.state.playPhase === 'active';
+		const showPausedControls =
+			tableViewState === 'board' &&
+			!this.state.running &&
+			this.state.playPhase === 'paused';
+		const showBingoControls =
+			tableViewState === 'board' &&
+			!this.state.running &&
+			this.state.playPhase === 'bingo';
+		const showClearedControls =
+			tableViewState === 'board' &&
+			!this.state.running &&
+			this.state.playPhase === 'cleared';
+		const showFullBoardControls =
+			tableViewState === 'board' && !showOnDeckControls && !showReadyControls && !showActiveControls && !showPausedControls && !showBingoControls && !showClearedControls;
+		const idleTableTitle = tableViewState === 'opening' ? 'Table Open' : 'Table Closed';
+		const idleTableCopy = tableViewState === 'opening'
+			? 'Host has opened the Table.'
+			: tableViewState === 'open'
+				? 'Host has joined the Table.'
+				: 'No game is currently in session.';
+		const idleLoadingLabel = tableViewState === 'opening' ? 'Joining' : 'Loading';
+		const totalCalls = Array.isArray(this.state.callHistory) ? this.state.callHistory.length : 0;
+		const previousCall = totalCalls > 1
+			? this.state.callHistory[totalCalls - 2]
+			: null;
+		const previousCallText = previousCall ? String(previousCall.number) : '—';
+		const priorCallHistory = activeBall
+			? this.state.callHistory.slice(Math.max(totalCalls - 10, 0), Math.max(totalCalls - 1, 0))
+			: this.state.callHistory.slice(Math.max(totalCalls - 9, 0));
+		const previousBallSlots = Array.from({ length: 9 }, (_, index) => priorCallHistory[index] || null);
+		const getBallColor = (letter) => {
+			switch (letter) {
+				case 'B':
+					return 'blue';
+				case 'I':
+					return 'red';
+				case 'N':
+					return 'white';
+				case 'G':
+					return 'green';
+				case 'O':
+					return 'yellow';
+				default:
+					return 'white';
+			}
+		};
 		return (
 			<div>
 				<div id="backdrop" className={this.backdropClasses}></div>
@@ -798,127 +1080,210 @@ class LetsPlayBingo extends Component {
 					<h4 className="no-margin">Bingo!</h4>
 					<p className="small-text">All of the bingo balls have been called!</p>
 					<p>
-						<button onClick={this.resetGame}>Reset</button> |{' '}
-						<button onClick={this.clearTable}>Clear Table</button> |{' '}
-						<button onClick={this.setTable}>Set Table</button> |{' '}
+						<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button> |{' '}
+						<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button> |{' '}
 						<button onClick={this.closeAlert}>Close</button>
+					</p>
+				</div>
+				<div id="confirmation" className={this.confirmClasses}>
+					<h4 className="no-margin">{this.state.confirmTitle}</h4>
+					<p className="small-text">{this.state.confirmMessage}</p>
+					<p>
+						<button className="lpb-btn lpb-btn-confirm" onClick={this.proceedConfirm}>{this.state.confirmButtonText}</button> |{' '}
+						<button className="lpb-btn lpb-btn-clear" onClick={this.closeConfirm}>Cancel</button>
 					</p>
 				</div>
 
 				<header>
 					<div className="row">
-						<div className="col c50">
+						<div className="col c100">
 							<div className="logo-block">
 								<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
 							</div>
-						</div>
-						<div className="col c50 text-right">
-							<div id="google_translate_element"></div>
 						</div>
 					</div>
 				</header>
 
 				<section id="board">
-					<div className="row flex">
-						<div className="col c85">
-							<BingoBoard balls={this.state.balls} />
+					{showIdleTable ? (
+						<div className="row">
+							<div className="lpb-table-closed">
+								<div className="lpb-table-closed-card">
+									<img className="lpb-table-closed-logo" src={logo} alt="Let's Play Bingo Logo" />
+									<div className="lpb-table-closed-title">{idleTableTitle}</div>
+									<div className="lpb-table-closed-copy">{idleTableCopy}</div>
+									{tableViewState === 'opening' || (tableViewState === 'open' && this.state.sessionAction === 'host_table') ? (
+										<div className="lpb-table-open-loading" aria-live="polite">
+											<span className="lpb-table-open-loading-label">{idleLoadingLabel}</span>
+											<span className="lpb-table-open-loading-dots">
+												<span></span>
+												<span></span>
+												<span></span>
+											</span>
+										</div>
+									) : null}
+								</div>
+							</div>
 						</div>
-						<div className="col c15 padding">
-							<BallDisplay balls={this.state.balls} />
-						</div>
-					</div>
+					) : (
+						<>
+							<div className="row lpb-board-shell">
+								<div className="lpb-board-side lpb-board-stats">
+									<div className="lpb-call-summary-wrap notranslate">
+										<div className="lpb-call-summary">
+											<div className="lpb-call-summary-item">
+												<div className="lpb-call-summary-box">
+													<SevenSegmentText text={String(totalCalls)} variant="box" />
+												</div>
+												<div className="lpb-call-summary-label">Calls</div>
+											</div>
+											<div className="lpb-call-summary-item">
+												<div className="lpb-call-summary-box">
+													<SevenSegmentText text={previousCallText} variant="box" />
+												</div>
+												<div className="lpb-call-summary-label">Previous</div>
+											</div>
+										</div>
+										<div className="lpb-call-pattern-wrap">
+											<Pattern />
+										</div>
+									</div>
+								</div>
+								<div className="lpb-board-center">
+									<div className="lpb-board-center-panel">
+										<BingoBoard balls={this.state.balls} />
+									</div>
+								</div>
+								<div className="lpb-board-side lpb-board-ball">
+									<div className="lpb-board-ball-panel">
+										<BallDisplay balls={this.state.balls} />
+										<div className="lpb-call-history-grid notranslate" aria-label="Previous nine balls">
+											{previousBallSlots.map((ball, index) => (
+												<div
+													key={ball ? `${ball.letter}${ball.number}-${index}` : `empty-${index}`}
+													className="lpb-call-history-slot"
+												>
+													<div className={`lpb-mini-ball ${ball ? getBallColor(ball.letter) : 'lpb-mini-ball-empty'}`}>
+														<div className="lpb-mini-ball-content">
+															{ball ? (
+																<span>
+																	<span className="ball-letter">{ball.letter}</span>
+																	<span className="ball-number">{ball.number}</span>
+																</span>
+															) : null}
+														</div>
+													</div>
+												</div>
+											))}
+										</div>
+									</div>
+								</div>
+							</div>
+						</>
+					)}
 				</section>
 
 				<section id="buttons">
 					<div className="row">
-						<div className="col c40">
-							<button
-								onClick={this.state.newGame ? this.startGame : this.toggleGame}
-							>
-								{this.state.newGame
-									? 'Start'
-									: this.state.running
-										? 'Pause'
-										: 'Resume'}
-							</button>
-							<button
-								onClick={this.callNumber}
-								disabled={this.state.running ? 'disabled' : ''}
-							>
-								Next Number
-							</button>
-							<button onClick={this.resetGame}>Reset</button>
-							<button onClick={this.clearTable}>Clear Table</button>
-							<button onClick={this.setTable}>Set Table</button>
-						</div>
-						<div className="col c40 text-center">
-							<div id="speed">
-								<span>Slow</span>
-								<input
-									onChange={(e) => this.setDelay(e)}
-									type="range"
-									value={this.state.delay}
-									min="5000"
-									max="16000"
-									step="1000"
-								/>
-								<span>Fast</span>
-							</div>
-						</div>
-						<div className="col c20 text-right">
-							{this.state.speechEnabled ? (
-								<Select
-									name="voiceselect"
-									placeholder="Choose Caller"
-									searchable
-									onBlurResetsInput={true}
-									value={
-										this.state.selectedCaller
-											? this.state.selectedCaller.value
-											: ''
-									}
-									onChange={this.chooseCaller}
-									options={_.map(this.state.voices, (voice, index) => ({
-										value: index,
-										label: voice.name + ' / ' + getLanguageText(voice.lang),
-									}))}
-								/>
-							) : (
-								<span className="small-text single-line-height">
-									Sorry, your browser doesn't support our vocal caller! Try
-									Chrome!
-								</span>
-							)}
-						</div>
-					</div>
-				</section>
-
-				<section>
-					<div className="row">
-						<div className="col c100 padding">
-							<Pattern />
+						<div className="col c100">
+							{showAccessCodeGate ? (
+								<div className="lpb-access-code-wrap">
+									<label className="lpb-access-code-label" htmlFor="lpb-access-code">Access Code</label>
+									<input
+										id="lpb-access-code"
+										className="lpb-access-code-input"
+										type="password"
+										inputMode="numeric"
+										autoComplete="off"
+										maxLength={8}
+										value={this.state.accessCodeInput}
+										onChange={this.handleAccessCodeChange}
+									/>
+									{showAccessDenied ? (
+										<div className="lpb-access-code-denied">Access Denied</div>
+									) : null}
+								</div>
+							) : null}
+							{showHostButton ? (
+								<button className="lpb-btn lpb-btn-host" onClick={this.handleOpenTable}>Host</button>
+							) : null}
+							{showHostedOnlyControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-open-table" onClick={this.handleTableOpen}>Open Table</button>
+									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+								</>
+							) : null}
+							{showOnDeckControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
+									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+								</>
+							) : null}
+							{showReadyControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-open" onClick={this.handleOpenPlay}>Open Play</button>
+									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+								</>
+							) : null}
+							{showActiveControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
+									<button className="lpb-btn lpb-btn-next" onClick={this.handleCallNextBall}>Call Next Ball</button>
+								</>
+							) : null}
+							{showPausedControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-resume" onClick={this.handleResumeDraw}>Resume Draw</button>
+									<button className="lpb-btn lpb-btn-reset" onClick={this.handleBingo}>Bingo</button>
+									<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button>
+								</>
+							) : null}
+							{showBingoControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-reset" onClick={this.handleLoadNextSet}>Load Next Set</button>
+									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+								</>
+							) : null}
+							{showClearedControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
+									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+								</>
+							) : null}
+							{showFullBoardControls ? (
+								<>
+									<button className="lpb-btn lpb-btn-open" onClick={this.handleOpenPlay}>Open Play</button>
+									<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
+									<button className="lpb-btn lpb-btn-resume" onClick={this.handleResumeDraw}>Resume Draw</button>
+									<button className="lpb-btn lpb-btn-open-table" onClick={this.handleTableOpen}>Open Table</button>
+									<button
+										className="lpb-btn lpb-btn-next"
+										onClick={this.handleCallNextBall}
+										disabled={this.state.running ? 'disabled' : ''}
+									>
+										Call Next Ball
+									</button>
+									<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button>
+									<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+									<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
+								</>
+							) : null}
 						</div>
 					</div>
 				</section>
 
 				<footer>
 					<div className="row">
-						<div className="col c30 text-left">
-							For entertainment purposes only.
+						<div className="col c50 text-left">
+							For fundraising purposes only.
 						</div>
-						<div className="col c40 text-center">
+						<div className="col c50 text-right">
 							<p>
-								© 2017-{this.year}{' '}
+								© {this.year}{' '}
 								<a href="https://letsplaybingo.io" className="notranslate">
 									Let's Play Bingo!
 								</a>
 							</p>
-						</div>
-						<div className="col c30 text-right">
-							<a href="https://letsplaybingo.io/terms">Terms of Use</a> |{' '}
-							<a href="https://letsplaybingo.io/privacy">
-								Cookies &amp; Privacy Policy
-							</a>
 						</div>
 					</div>
 				</footer>
