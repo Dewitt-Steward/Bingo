@@ -1077,12 +1077,29 @@ class LetsPlayBingo extends Component {
 			playLookupError: '',
 		});
 		try {
-			const response = await fetch(`/api/books/${familyId}?game=${selectedGameIndex}`);
-			if (!response.ok) {
-				throw new Error('not_found');
+			let orderData = null;
+			try {
+				const response = await fetch(`/api/books/${familyId}?game=${selectedGameIndex}`);
+				if (!response.ok) {
+					throw new Error('api_not_found');
+				}
+				const result = await response.json();
+				orderData = result && result.order ? result.order : null;
+			} catch (apiError) {
+				const publicUrl = process.env.PUBLIC_URL || '';
+				const staticBooksUrl = `${publicUrl}/Books.json`;
+				const staticResponse = await fetch(staticBooksUrl);
+				if (!staticResponse.ok) {
+					throw new Error('not_found');
+				}
+				const staticData = await staticResponse.json();
+				orderData =
+					staticData &&
+					staticData.orders &&
+					staticData.orders[familyId]
+						? staticData.orders[familyId]
+						: null;
 			}
-			const result = await response.json();
-			const orderData = result && result.order ? result.order : null;
 			if (!orderData || typeof orderData.totalCards !== 'number') {
 				throw new Error('not_found');
 			}

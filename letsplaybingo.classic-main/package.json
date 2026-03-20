@@ -12,6 +12,7 @@
     "underscore": "^1.10.2"
   },
   "scripts": {
+    "prebuild": "cp ../Books.json public/Books.json",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
