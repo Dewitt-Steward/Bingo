@@ -67,6 +67,32 @@ const radioStreamUrl = 'https://ice41.securenetsystems.net/KOWNLP';
 const radioMetadataUrl = 'https://r.jina.ai/http://https://957fmtheboss.com/?qtproxycall=aHR0cHM6Ly9pY2U0MS5zZWN1cmVuZXRzeXN0ZW1zLm5ldC9LT1dOTFA=&icymetadata=1';
 const radioLogoUrl = 'https://957fmtheboss.com/wp-content/uploads/2020/06/boss_blk.png';
 
+function getBingoRuntimeConfig() {
+	try {
+		if (typeof window === 'undefined' || !window.LPB_CONFIG || typeof window.LPB_CONFIG !== 'object') {
+			return {};
+		}
+		return window.LPB_CONFIG;
+	} catch (e) {
+		return {};
+	}
+}
+
+function getSharedSessionEndpoint() {
+	const runtimeConfig = getBingoRuntimeConfig();
+	const configuredUrl = String(runtimeConfig.sessionApiUrl || '').trim();
+	if (configuredUrl) {
+		return configuredUrl;
+	}
+	if (typeof window !== 'undefined') {
+		const host = String(window.location.hostname || '').toLowerCase();
+		if (host === 'localhost' || host === '127.0.0.1') {
+			return '/api/session';
+		}
+	}
+	return '';
+}
+
 function shuffleList(values) {
 	const list = [...values];
 	for (let i = list.length - 1; i > 0; i -= 1) {
@@ -462,6 +488,7 @@ class LetsPlayBingo extends Component {
 			playPage: 0,
 			patternResetToken: 0,
 			hostVerified: false,
+			hostAccessCode: '',
 			boardControlState: 'needs_host',
 			showHostAccessDialog: false,
 			hostAccessInput: '',
@@ -620,8 +647,14 @@ class LetsPlayBingo extends Component {
 	};
 
 	fetchSharedSession = async () => {
+		const endpoint = getSharedSessionEndpoint();
+		if (!endpoint) {
+			return;
+		}
 		try {
-			const response = await fetch('/api/session');
+			const response = await fetch(endpoint, {
+				method: 'GET',
+			});
 			if (!response.ok) {
 				return;
 			}
@@ -645,13 +678,23 @@ class LetsPlayBingo extends Component {
 	};
 
 	publishSharedSession = async (stateRef) => {
+		const endpoint = getSharedSessionEndpoint();
+		const hostKey = String(
+			(stateRef && stateRef.hostAccessCode) ||
+			this.state.hostAccessCode ||
+			''
+		).trim();
+		if (!endpoint || !hostKey) {
+			return;
+		}
 		try {
-			const response = await fetch('/api/session', {
+			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
+					hostKey,
 					session: this.getSharedSessionSnapshot(stateRef),
 				}),
 			});
@@ -980,9 +1023,7 @@ class LetsPlayBingo extends Component {
 	handleBingo = () => {
 		this.pauseGame();
 		if (!this.state.bingoDetectedPin) {
-			this.setState({ bingoDetectedPin: this.createBingoPin() }, () => {
-				this.publishSharedSession();
-			});
+			this.setState({ bingoDetectedPin: this.createBingoPin() });
 		}
 	};
 
@@ -1068,6 +1109,7 @@ class LetsPlayBingo extends Component {
 		this.setState({
 			showHostAccessDialog: false,
 			hostVerified: true,
+			hostAccessCode: provided,
 			boardControlState: 'host_ready',
 			hostAccessError: '',
 		});
