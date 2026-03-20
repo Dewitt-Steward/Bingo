@@ -8,31 +8,248 @@ import React, { Component } from 'react';
 import _ from 'underscore';
 // Styles and Images
 import logo from './logo.svg';
-import venmo from './images/venmo.jpeg';
-import paypal from './images/paypalme.jpeg';
-import buyacoffee from './images/buyacoffee.png';
+import logoLight from './logo-light.svg';
 // Components
 import BingoBoard from './components/BingoBoard.js';
-import Pattern from './components/Pattern.js';
 import BallDisplay from './components/BallDisplay.js';
+import Pattern from './components/Pattern.js';
 import SevenSegmentText from './components/SevenSegmentText.js';
 
-const SHARED_BINGO_ENDPOINTS = [
-	'https://dlbhfamily.com/wp-json/dlbh-bingo/v1',
-	'https://www.dlbhfamily.com/wp-json/dlbh-bingo/v1',
+const orderPackages = [
+	{
+		tier: 'Bronze',
+		name: 'Lucky Seat',
+		price: 10,
+		cardsPerGameCount: 1,
+		cardsPerGame: '1 card per game',
+		description:
+			'A refined entry into the action. Bronze Lucky Seat places 1 card into automatic play each round, giving you a smooth and steady presence throughout the full session.',
+	},
+	{
+		tier: 'Silver',
+		name: 'Double Down',
+		price: 15,
+		cardsPerGameCount: 2,
+		cardsPerGame: '2 cards per game',
+		description:
+			'A stronger position with added reach. Silver Double Down places 2 cards into automatic play each round, giving you greater coverage and more ways to stay in contention.',
+	},
+	{
+		tier: 'Gold',
+		name: 'High Roller',
+		price: 20,
+		cardsPerGameCount: 3,
+		cardsPerGame: '3 cards per game',
+		description:
+			'A more commanding way to play. Gold High Roller places 3 cards into automatic play each round, giving you broader board presence and elevated momentum across the session.',
+	},
+	{
+		tier: 'Platinum',
+		name: 'Royal Flush',
+		price: 25,
+		cardsPerGameCount: 4,
+		cardsPerGame: '4 cards per game',
+		description:
+			'Our most premium level of play. Platinum Royal Flush places 4 cards into automatic play each round, delivering your strongest coverage and the fullest level of action available.',
+	},
 ];
 
+const bingoLetters = ['B', 'I', 'N', 'G', 'O'];
+const openTableDeals = [
+	'Open Deal',
+	'Lucky Run',
+	'Double Down',
+	'High Stakes',
+	'Jackpot Chase',
+	'Royal Finish',
+];
+const radioStreamUrl = 'https://ice41.securenetsystems.net/KOWNLP';
+const radioMetadataUrl = 'https://r.jina.ai/http://https://957fmtheboss.com/?qtproxycall=aHR0cHM6Ly9pY2U0MS5zZWN1cmVuZXRzeXN0ZW1zLm5ldC9LT1dOTFA=&icymetadata=1';
+const radioLogoUrl = 'https://957fmtheboss.com/wp-content/uploads/2020/06/boss_blk.png';
+
+function shuffleList(values) {
+	const list = [...values];
+	for (let i = list.length - 1; i > 0; i -= 1) {
+		const j = Math.floor(Math.random() * (i + 1));
+		const temp = list[i];
+		list[i] = list[j];
+		list[j] = temp;
+	}
+	return list;
+}
+
+function pickRandomUnique(min, max, count) {
+	const pool = Array.from({ length: (max - min) + 1 }, (_, idx) => min + idx);
+	return shuffleList(pool).slice(0, count).sort((a, b) => a - b);
+}
+
+function generateRandomBingoCard() {
+	const b = pickRandomUnique(1, 15, 5);
+	const i = pickRandomUnique(16, 30, 5);
+	const nBase = pickRandomUnique(31, 45, 4);
+	const g = pickRandomUnique(46, 60, 5);
+	const o = pickRandomUnique(61, 75, 5);
+	const n = [nBase[0], nBase[1], 'FREE', nBase[2], nBase[3]];
+	return { B: b, I: i, N: n, G: g, O: o };
+}
+
+function generateRandomBingoDeck(cardCount) {
+	const safeCount = Math.max(0, parseInt(cardCount, 10) || 0);
+	const uniqueCards = [];
+	const seen = new Set();
+	let attempts = 0;
+	const maxAttempts = Math.max(200, safeCount * 120);
+	while (uniqueCards.length < safeCount && attempts < maxAttempts) {
+		attempts += 1;
+		const card = generateRandomBingoCard();
+		const signature = ['B', 'I', 'N', 'G', 'O']
+			.map((letter) => (Array.isArray(card[letter]) ? card[letter].join('-') : ''))
+			.join('|');
+		if (seen.has(signature)) {
+			continue;
+		}
+		seen.add(signature);
+		uniqueCards.push(card);
+	}
+	return uniqueCards;
+}
+
+function isMarkedCellValue(value, calledNumbersSet) {
+	if (value === 'FREE') return true;
+	const numericValue = parseInt(value, 10);
+	if (Number.isNaN(numericValue)) return false;
+	return calledNumbersSet.has(numericValue);
+}
+
+function getStoredPatternConfig() {
+	try {
+		if (typeof window === 'undefined' || !window.localStorage) {
+			return null;
+		}
+		const raw = window.localStorage.getItem('lpbclassicpattern');
+		if (!raw) return null;
+		const parsed = JSON.parse(raw);
+		const pattern = parsed && parsed.pattern ? parsed.pattern : null;
+		if (!pattern || typeof pattern !== 'object') return null;
+		return pattern;
+	} catch (e) {
+		return null;
+	}
+}
+
+function hasPatternSelections(pattern) {
+	if (!pattern || typeof pattern !== 'object') return false;
+	return bingoLetters.some((letter) => {
+		const column = pattern[letter];
+		return Array.isArray(column) && column.some((slot) => !!slot);
+	});
+}
+
+function cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern) {
+	if (!cardData || !hasPatternSelections(pattern)) return false;
+	return bingoLetters.every((letter) => {
+		const patternColumn = Array.isArray(pattern[letter]) ? pattern[letter] : [];
+		const cardColumn = Array.isArray(cardData[letter]) ? cardData[letter] : [];
+		for (let row = 0; row < 5; row += 1) {
+			if (patternColumn[row] && !isMarkedCellValue(cardColumn[row], calledNumbersSet)) {
+				return false;
+			}
+		}
+		return true;
+	});
+}
+
+function cardHasClassicBingo(cardData, calledNumbersSet) {
+	if (!cardData) return false;
+	const grid = Array.from({ length: 5 }, (_, rowIndex) => (
+		bingoLetters.map((letter) => {
+			const column = Array.isArray(cardData[letter]) ? cardData[letter] : [];
+			return column[rowIndex];
+		})
+	));
+	const hasWinningRow = grid.some((row) => row.every((value) => isMarkedCellValue(value, calledNumbersSet)));
+	if (hasWinningRow) return true;
+	const hasWinningColumn = bingoLetters.some((_, colIndex) => (
+		grid.every((row) => isMarkedCellValue(row[colIndex], calledNumbersSet))
+	));
+	if (hasWinningColumn) return true;
+	const hasPrimaryDiagonal = grid.every((row, index) => isMarkedCellValue(row[index], calledNumbersSet));
+	if (hasPrimaryDiagonal) return true;
+	const hasSecondaryDiagonal = grid.every((row, index) => isMarkedCellValue(row[4 - index], calledNumbersSet));
+	return hasSecondaryDiagonal;
+}
+
+function cardHasBingo(cardData, calledNumbersSet, pattern) {
+	if (hasPatternSelections(pattern)) {
+		return cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern);
+	}
+	return cardHasClassicBingo(cardData, calledNumbersSet);
+}
+
 function getCentralDateAccessCode() {
-	const parts = new Intl.DateTimeFormat('en-US', {
-		timeZone: 'America/Chicago',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-	}).formatToParts(new Date());
-	const month = parts.find((part) => part.type === 'month')?.value || '';
-	const day = parts.find((part) => part.type === 'day')?.value || '';
-	const year = parts.find((part) => part.type === 'year')?.value || '';
-	return `${month}${day}${year}`;
+	try {
+		const formatter = new Intl.DateTimeFormat('en-US', {
+			timeZone: 'America/Chicago',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+		});
+		const parts = formatter.formatToParts(new Date());
+		const month = (parts.find((part) => part.type === 'month') || {}).value || '01';
+		const day = (parts.find((part) => part.type === 'day') || {}).value || '01';
+		const year = (parts.find((part) => part.type === 'year') || {}).value || '1970';
+		return `${month}${day}${year}`;
+	} catch (e) {
+		const fallback = new Date();
+		const month = String(fallback.getMonth() + 1).padStart(2, '0');
+		const day = String(fallback.getDate()).padStart(2, '0');
+		const year = String(fallback.getFullYear());
+		return `${month}${day}${year}`;
+	}
+}
+
+function getBcinStart(familyId, totalCards) {
+	const familyIdNumber = parseInt(String(familyId || '0'), 10) || 0;
+	const totalCardCount = parseInt(String(totalCards || '0'), 10) || 0;
+	return (familyIdNumber * totalCardCount) % 100000;
+}
+
+function getBcinValue(familyId, totalCards, cardIndex) {
+	const start = getBcinStart(familyId, totalCards);
+	return String((start + cardIndex) % 100000).padStart(5, '0');
+}
+
+function getPlayRoomMeta(totalBooks) {
+	if (totalBooks <= 1) {
+		return {
+			key: 'bronze',
+			title: 'Lucky Seat Lounge',
+			welcome:
+				'Welcome to the Lucky Seat Lounge, where polished entry meets steady action and every round keeps you in play.',
+		};
+	}
+	if (totalBooks === 2) {
+		return {
+			key: 'silver',
+			title: 'Double Down Suite',
+			welcome:
+				'Welcome to the Double Down Suite, where stronger position, added reach, and elevated action shape your experience each round.',
+		};
+	}
+	if (totalBooks === 3) {
+		return {
+			key: 'gold',
+			title: 'High Roller Salon',
+			welcome:
+				'Welcome to the High Roller Salon, where premium play, broader coverage, and commanding presence define the session.',
+		};
+	}
+	return {
+		key: 'platinum',
+		title: 'Royal Flush Reserve',
+		welcome:
+			'Welcome to the Royal Flush Reserve, where top-tier standing, prime position, and full-strength action set the standard for play.',
+	};
 }
 
 const newGameState = {
@@ -115,13 +332,7 @@ const newGameState = {
 	},
 	newGame: true,
 	running: false,
-	gameId: 1,
-	tableEmpty: false,
-	tableOpen: false,
-	tableOpening: false,
-	playPhase: 'idle',
 	callHistory: [],
-	sessionAction: 'reset',
 };
 
 class LetsPlayBingo extends Component {
@@ -134,6 +345,13 @@ class LetsPlayBingo extends Component {
 	 */
 	constructor(props) {
 		super(props);
+		this.radioAudio = null;
+		this.radioMetadataTimer = null;
+		this.radioAudioContext = null;
+		this.radioAnalyser = null;
+		this.radioSourceNode = null;
+		this.radioAnimationFrame = null;
+		this.radioFrequencyData = null;
 		try {
 			window.name = 'lpb_caller_window';
 		} catch (e) {}
@@ -145,8 +363,9 @@ class LetsPlayBingo extends Component {
 			confirmTitle: '',
 			confirmMessage: '',
 			confirmButtonText: 'Confirm',
-			accessCodeInput: '',
-			accessCodeVerified: false,
+			radioPlaying: false,
+			radioNowPlaying: '',
+			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
 			balls: {
 				1: { letter: 'B', number: 1, called: false, active: false },
 				2: { letter: 'B', number: 2, called: false, active: false },
@@ -226,34 +445,34 @@ class LetsPlayBingo extends Component {
 			},
 			newGame: true,
 			running: false,
-			gameId: 1,
-			tableEmpty: false,
-			tableOpen: false,
-			tableOpening: false,
-			playPhase: 'idle',
 			callHistory: [],
-			sessionAction: 'reset',
+			activeScreen: 'caller',
+			familyIdInput: '',
+			orderTotalInput: '',
+			orderSaveMessage: '',
+			playFamilyIdInput: '',
+			playLookupError: '',
+			playLookupLoading: false,
+			playOrderData: null,
+			playCardDeck: [],
+			bingoDetectedPin: '',
+			playPage: 0,
+			patternResetToken: 0,
+			hostVerified: false,
+			boardControlState: 'needs_host',
+			showHostAccessDialog: false,
+			hostAccessInput: '',
+			hostAccessError: '',
+			headerMenuSelection: '',
+			showOpenTableDialog: false,
+			openTableDeal: openTableDeals[0],
+			selectedTableDeal: '',
+			selectedTableDealIndex: 0,
 			interval: 0,
 			delay: 10000,
 		};
 		this.pendingConfirmAction = null;
-		let skipCacheRestore = false;
-		try {
-			const host = String(window.location.hostname || '').toLowerCase();
-			const path = String(window.location.pathname || '');
-			const search = String(window.location.search || '');
-			this.isViewerMode = /(?:\?|&)viewer=1(?:&|$)/.test(search);
-			if (host === 'dewitt-steward.github.io' && path.indexOf('/Bingo') === 0) {
-				skipCacheRestore = true;
-				localStorage.removeItem('lpbclassic');
-			}
-		} catch (e) {}
-		if (typeof this.isViewerMode !== 'boolean') this.isViewerMode = false;
-		this.isSharedHost = skipCacheRestore;
-		this.sharedSessionLoaded = !skipCacheRestore;
-		this.applyingSharedSession = false;
-
-		const cache = skipCacheRestore ? null : JSON.parse(localStorage.getItem('lpbclassic'));
+		const cache = JSON.parse(localStorage.getItem('lpbclassic'));
 		if (cache) {
 			if (Object.keys(cache).length > 0) {
 				// there's a cache available, apply to this.state
@@ -297,310 +516,255 @@ class LetsPlayBingo extends Component {
 			unloadingTime = unloadingTime.getTime();
 			localStorage.setItem('lpb-unloadtime', JSON.stringify(unloadingTime));
 		});
-		if (!this.isViewerMode) {
-			window.addEventListener('message', this.handleBridgeMessage);
-			setTimeout(this.notifyBridgeReady, 250);
-			this.bridgeInterval = setInterval(this.bridgeHeartbeat, 1000);
-		}
-	}
-
-	componentDidMount() {
-		if (this.isSharedHost) {
-			this.loadSharedSession();
-			if (this.isViewerMode) {
-				this.sharedSessionPollInterval = setInterval(this.loadSharedSession, 1000);
-			}
-		}
 	}
 
 	componentWillUnmount() {
-		if (!this.isViewerMode) window.removeEventListener('message', this.handleBridgeMessage);
-		if (this.bridgeInterval) clearInterval(this.bridgeInterval);
-		if (this.sharedSessionPollInterval) clearInterval(this.sharedSessionPollInterval);
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
+		this.stopRadioVisualizer();
+		if (this.radioMetadataTimer) {
+			clearInterval(this.radioMetadataTimer);
+			this.radioMetadataTimer = null;
+		}
+		if (this.radioAudio) {
+			try {
+				this.radioAudio.removeEventListener('pause', this.handleRadioAudioPause);
+				this.radioAudio.removeEventListener('ended', this.handleRadioAudioEnded);
+				this.radioAudio.removeEventListener('error', this.handleRadioAudioError);
+				this.radioAudio.removeEventListener('abort', this.handleRadioAudioError);
+				this.radioAudio.removeEventListener('emptied', this.handleRadioAudioError);
+				this.radioAudio.pause();
+				this.radioAudio.src = '';
+			} catch (e) {}
+			this.radioAudio = null;
+		}
+		return undefined;
 	}
+
+	stopRadioVisualizer = () => {
+		if (this.radioAnimationFrame) {
+			cancelAnimationFrame(this.radioAnimationFrame);
+			this.radioAnimationFrame = null;
+		}
+		if (this.radioAnalyser) {
+			try {
+				this.radioAnalyser.disconnect();
+			} catch (e) {}
+			this.radioAnalyser = null;
+		}
+		if (this.radioSourceNode) {
+			try {
+				this.radioSourceNode.disconnect();
+			} catch (e) {}
+			this.radioSourceNode = null;
+		}
+		if (this.radioAudioContext) {
+			try {
+				this.radioAudioContext.close();
+			} catch (e) {}
+			this.radioAudioContext = null;
+		}
+		this.radioFrequencyData = null;
+		this.setState({
+			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
+		});
+	};
+
+	updateRadioVisualizerFrame = () => {
+		if (!this.radioAnalyser || !this.radioFrequencyData || !this.state.radioPlaying) {
+			return;
+		}
+		this.radioAnalyser.getByteFrequencyData(this.radioFrequencyData);
+		const bucketCount = 16;
+		const valuesPerBucket = Math.max(1, Math.floor(this.radioFrequencyData.length / bucketCount));
+		const nextLevels = Array.from({ length: bucketCount }, (_, bucketIndex) => {
+			const start = bucketIndex * valuesPerBucket;
+			const end = Math.min(this.radioFrequencyData.length, start + valuesPerBucket);
+			let total = 0;
+			let count = 0;
+			for (let i = start; i < end; i += 1) {
+				total += this.radioFrequencyData[i];
+				count += 1;
+			}
+			const average = count ? total / count : 0;
+			return Math.max(0.16, Math.min(1, average / 255));
+		});
+		this.setState({ radioVisualizerLevels: nextLevels });
+		this.radioAnimationFrame = requestAnimationFrame(this.updateRadioVisualizerFrame);
+	};
+
+	startRadioVisualizer = async () => {
+		if (!this.radioAudio) {
+			return;
+		}
+		const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+		if (!AudioContextClass) {
+			return;
+		}
+		if (!this.radioAudioContext) {
+			this.radioAudioContext = new AudioContextClass();
+		}
+		if (this.radioAudioContext.state === 'suspended') {
+			try {
+				await this.radioAudioContext.resume();
+			} catch (e) {}
+		}
+		if (!this.radioSourceNode) {
+			this.radioSourceNode = this.radioAudioContext.createMediaElementSource(this.radioAudio);
+		}
+		if (!this.radioAnalyser) {
+			this.radioAnalyser = this.radioAudioContext.createAnalyser();
+			this.radioAnalyser.fftSize = 64;
+			this.radioAnalyser.smoothingTimeConstant = 0.82;
+			this.radioFrequencyData = new Uint8Array(this.radioAnalyser.frequencyBinCount);
+			this.radioSourceNode.connect(this.radioAnalyser);
+			this.radioAnalyser.connect(this.radioAudioContext.destination);
+		}
+		if (this.radioAnimationFrame) {
+			cancelAnimationFrame(this.radioAnimationFrame);
+		}
+		this.radioAnimationFrame = requestAnimationFrame(this.updateRadioVisualizerFrame);
+	};
+
+	stopRadioPlayback = () => {
+		this.stopRadioVisualizer();
+		if (this.radioMetadataTimer) {
+			clearInterval(this.radioMetadataTimer);
+			this.radioMetadataTimer = null;
+		}
+		if (this.radioAudio) {
+			try {
+				this.radioAudio.pause();
+			} catch (e) {}
+		}
+		this.setState({
+			radioPlaying: false,
+			radioNowPlaying: '',
+			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
+		});
+	};
+
+	handleRadioAudioPause = () => {
+		if (!this.radioAudio || this.radioAudio.ended) {
+			return;
+		}
+		this.stopRadioPlayback();
+	};
+
+	handleRadioAudioEnded = () => {
+		this.stopRadioPlayback();
+	};
+
+	handleRadioAudioError = () => {
+		this.stopRadioPlayback();
+	};
+
+	parseRadioMetadata = (rawText) => {
+		const text = String(rawText || '').trim();
+		if (!text) return '';
+		const markdownMarker = 'Markdown Content:';
+		const body = text.includes(markdownMarker)
+			? text.split(markdownMarker).pop()
+			: text;
+		const lines = body
+			.split('\n')
+			.map((line) => line.trim())
+			.filter(Boolean)
+			.filter((line) => !/^Title:\s*/i.test(line))
+			.filter((line) => !/^URL Source:\s*/i.test(line))
+			.filter((line) => !/^Published Time:\s*/i.test(line));
+		return lines.length ? lines[lines.length - 1] : '';
+	};
+
+	parseRadioNowPlayingParts = (nowPlaying) => {
+		const text = String(nowPlaying || '').trim();
+		if (!text) {
+			return { artist: '', track: '' };
+		}
+		const separators = [' - ', ' – ', ' — ', '-'];
+		for (let i = 0; i < separators.length; i += 1) {
+			const separator = separators[i];
+			const parts = text.split(separator).map((part) => part.trim()).filter(Boolean);
+			if (parts.length >= 2) {
+				return {
+					artist: parts[0],
+					track: parts.slice(1).join(' - '),
+				};
+			}
+		}
+		return { artist: '', track: text };
+	};
+
+	fetchRadioMetadata = async () => {
+		try {
+			const response = await fetch(radioMetadataUrl, { method: 'GET' });
+			if (!response.ok) return;
+			const rawText = await response.text();
+			const nowPlaying = this.parseRadioMetadata(rawText);
+			if (nowPlaying) {
+				this.setState({ radioNowPlaying: nowPlaying });
+			}
+		} catch (e) {}
+	};
+
+	startRadioMetadataPolling = () => {
+		if (this.radioMetadataTimer) {
+			clearInterval(this.radioMetadataTimer);
+		}
+		this.fetchRadioMetadata();
+		this.radioMetadataTimer = setInterval(this.fetchRadioMetadata, 15000);
+	};
+
+	getCalledNumbersSet = (ballsState) => {
+		const sourceBalls = ballsState || {};
+		return new Set(
+			Object.keys(sourceBalls)
+				.map((key) => sourceBalls[key])
+				.filter((ball) => ball && ball.called)
+				.map((ball) => parseInt(ball.number, 10))
+				.filter((number) => !Number.isNaN(number))
+		);
+	};
+
+	hasBingoInState = (stateRef) => {
+		const state = stateRef || this.state;
+		const deck = Array.isArray(state.playCardDeck) ? state.playCardDeck : [];
+		if (!deck.length) return false;
+		const calledNumbersSet = this.getCalledNumbersSet(state.balls);
+		const selectedPattern = getStoredPatternConfig();
+		return deck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern));
+	};
+
+	createBingoPin = () => {
+		const now = new Date();
+		const hour24 = now.getHours();
+		const hour12 = (hour24 % 12) || 12;
+		const hh = String(hour12).padStart(2, '0');
+		const mm = String(now.getMinutes()).padStart(2, '0');
+		const ss = String(now.getSeconds()).padStart(2, '0');
+		const cs = String(Math.floor(now.getMilliseconds() / 10)).padStart(2, '0');
+		return `${hh}${mm}${ss}${cs}`;
+	};
 
 	componentDidUpdate() {
 		let stateCopy = { ...this.state };
 		delete stateCopy.showAlert;
 		delete stateCopy.showBackdrop;
 		localStorage.setItem('lpbclassic', JSON.stringify(stateCopy));
-		if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded && !this.applyingSharedSession) {
-			this.pushSharedSession();
-		}
-	}
-
-	buildSharedSessionState = () => {
-		const safeBalls = {};
-		Object.keys(this.state.balls || {}).forEach((key) => {
-			const ball = this.state.balls[key];
-			if (!ball) return;
-			safeBalls[key] = {
-				letter: ball.letter,
-				number: ball.number,
-				called: !!ball.called,
-				active: !!ball.active,
-			};
-		});
-		return {
-			balls: safeBalls,
-			newGame: !!this.state.newGame,
-			running: !!this.state.running,
-			gameId: parseInt(this.state.gameId, 10) || 1,
-			tableEmpty: !!this.state.tableEmpty,
-			tableOpen: !!this.state.tableOpen,
-			tableOpening: !!this.state.tableOpening,
-			playPhase: this.state.playPhase || 'idle',
-			callHistory: Array.isArray(this.state.callHistory) ? this.state.callHistory.slice(-75) : [],
-			sessionAction: this.state.sessionAction || 'play',
-			delay: parseInt(this.state.delay, 10) || 10000,
-			showAlert: !!this.state.showAlert,
-			ts: Date.now(),
-		};
-	};
-
-	pushSharedSession = () => {
-		if (typeof fetch !== 'function') return;
-		const payload = this.buildSharedSessionState();
-		SHARED_BINGO_ENDPOINTS.forEach((baseUrl) => {
-			try {
-				fetch(baseUrl + '/session', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(payload),
-					mode: 'cors',
-					credentials: 'omit',
-				}).catch(() => {});
-			} catch (e) {}
-		});
-	};
-
-	loadSharedSession = async () => {
-		if (typeof fetch !== 'function') {
-			this.sharedSessionLoaded = true;
-			return;
-		}
-		for (let i = 0; i < SHARED_BINGO_ENDPOINTS.length; i++) {
-			try {
-				const response = await fetch(SHARED_BINGO_ENDPOINTS[i] + '/session', {
-					method: 'GET',
-					mode: 'cors',
-					credentials: 'omit',
-					cache: 'no-store',
-				});
-				if (!response.ok) continue;
-				const session = await response.json();
-				if (!session || typeof session !== 'object' || !session.balls) continue;
-				const mergedBalls = JSON.parse(JSON.stringify(newGameState.balls));
-				Object.keys(session.balls || {}).forEach((key) => {
-					if (!mergedBalls[key] || !session.balls[key]) return;
-					mergedBalls[key] = {
-						...mergedBalls[key],
-						called: !!session.balls[key].called,
-						active: !!session.balls[key].active,
-					};
-				});
-				this.applyingSharedSession = true;
-				this.setState(
-					{
-						balls: mergedBalls,
-						newGame: typeof session.newGame === 'boolean' ? session.newGame : false,
-						running: false,
-						gameId: parseInt(session.gameId, 10) || 1,
-						tableEmpty: !!session.tableEmpty,
-						tableOpen: !!session.tableOpen,
-						tableOpening: !!session.tableOpening,
-						playPhase: session.playPhase || 'idle',
-						callHistory: Array.isArray(session.callHistory) ? session.callHistory.slice(-75) : [],
-						sessionAction: session.sessionAction || 'play',
-						delay: parseInt(session.delay, 10) || 10000,
-						showAlert: !!session.showAlert,
-						showBackdrop: !!session.showAlert,
-					},
-					() => {
-						this.applyingSharedSession = false;
-						this.sharedSessionLoaded = true;
-						if (!this.isViewerMode) this.pushSharedSession();
-					}
-				);
-				return;
-			} catch (e) {}
-		}
-		this.sharedSessionLoaded = true;
-		if (!this.isViewerMode) this.pushSharedSession();
 	};
 
 	say = () => {};
 
 	cancelSpeech = () => {};
 
-	/*
-	 *  Broadcast current called ball so external pages (like bingo.php Play)
-	 *  can render the live call in real time.
-	 */
 	broadcastCurrentCall = (ball) => {
 		if (!ball || !ball.letter || !ball.number) return;
-		const calledBalls = _.where(this.state.balls, { called: true });
-		const calledCount = calledBalls.length;
-		const calledNumbers = calledBalls
-			.map((item) => parseInt(item.number, 10))
-			.filter((item) => !isNaN(item))
-			.sort((a, b) => a - b);
-		const payload = {
-			type: 'LPB_CALL',
-			letter: ball.letter,
-			number: ball.number,
-			count: calledCount,
-			called_numbers: calledNumbers,
-			call: ball.letter + '' + ball.number,
-			ts: Date.now(),
-		};
 		try {
-			localStorage.setItem('lpbclassic_current_call', JSON.stringify(payload));
+			localStorage.setItem('lpbclassic_current_call', JSON.stringify({
+				letter: ball.letter,
+				number: ball.number,
+				call: ball.letter + '' + ball.number,
+				ts: Date.now(),
+			}));
 		} catch (e) {}
-		try { window.name = 'lpb_caller_window'; } catch (e) {}
-		try {
-			if (window.parent && window.parent !== window) {
-				window.parent.postMessage(payload, '*');
-			}
-		} catch (e) {}
-		try {
-			if (window.opener && !window.opener.closed) {
-				window.opener.postMessage(payload, '*');
-			}
-		} catch (e) {}
-		this.pushLiveCall(payload);
-	};
-
-	pushLiveCall = (payload) => {
-		if (!payload || typeof fetch !== 'function') return;
-		const endpoints = [
-			'https://dlbhfamily.com/wp-json/dlbh-bingo/v1/live-call',
-			'https://www.dlbhfamily.com/wp-json/dlbh-bingo/v1/live-call',
-		];
-		endpoints.forEach((endpoint) => {
-			try {
-				fetch(endpoint, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(payload),
-					mode: 'cors',
-					credentials: 'omit',
-				}).catch(() => {});
-			} catch (e) {}
-		});
-	};
-
-	pushLiveCallReset = () => {
-		try {
-			localStorage.removeItem('lpbclassic_current_call');
-		} catch (e) {}
-		this.pushLiveCall({
-			active: false,
-			letter: '',
-			number: '',
-			count: 0,
-			called_numbers: [],
-			ts: Date.now(),
-		});
-	};
-
-	handleBridgeMessage = (event) => {
-		let data = event ? event.data : null;
-		if (typeof data === 'string') {
-			try {
-				data = JSON.parse(data);
-			} catch (e) {
-				return;
-			}
-		}
-		if (!data || data.type !== 'LPB_REQUEST_CALL') return;
-
-		let payload = null;
-		try {
-			const raw = localStorage.getItem('lpbclassic_current_call');
-			if (raw) {
-				const parsed = JSON.parse(raw);
-				if (parsed && parsed.letter && parsed.number) {
-					payload = {
-						type: 'LPB_CALL',
-						letter: parsed.letter,
-						number: parsed.number,
-						call: parsed.letter + '' + parsed.number,
-						ts: Date.now(),
-					};
-				}
-			}
-		} catch (e) {}
-
-		if (!payload) {
-			const active = _.where(this.state.balls, { active: true })[0];
-			if (active && active.letter && active.number) {
-				payload = {
-					type: 'LPB_CALL',
-					letter: active.letter,
-					number: active.number,
-					call: active.letter + '' + active.number,
-					ts: Date.now(),
-				};
-			}
-		}
-		if (!payload) return;
-
-		try {
-			if (event && event.source && typeof event.source.postMessage === 'function') {
-				event.source.postMessage(payload, '*');
-			}
-		} catch (e) {}
-	};
-
-	notifyBridgeReady = () => {
-		const payload = { type: 'LPB_READY', ts: Date.now() };
-		try { window.name = 'lpb_caller_window'; } catch (e) {}
-		try {
-			if (window.parent && window.parent !== window) {
-				window.parent.postMessage(payload, '*');
-			}
-		} catch (e) {}
-		try {
-			if (window.opener && !window.opener.closed) {
-				window.opener.postMessage(payload, '*');
-			}
-		} catch (e) {}
-	};
-
-	bridgeHeartbeat = () => {
-		const active = _.where(this.state.balls, { active: true })[0];
-		if (active && active.letter && active.number) {
-			this.broadcastCurrentCall(active);
-			return;
-		}
-		this.notifyBridgeReady();
-	};
-
-	/*
-	 *  Reset Game Function
-	 *  Map out the original balls array and update
-	 *  active and called statuses to false
-	 */
-	resetGame = () => {
-		this.cancelSpeech();
-		if (this.state.running === true) {
-			clearInterval(this.state.interval);
-		}
-		let resetBalls = this.state.balls;
-		_.map(resetBalls, (ball, index) => {
-			resetBalls[index].active = false;
-			resetBalls[index].called = false;
-		});
-		if (this.state.showAlert === true) {
-			this.closeAlert();
-		}
-		this.pushLiveCallReset();
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
-		this.setState({ balls: resetBalls, newGame: true, running: false, interval: 0, gameId: (parseInt(this.state.gameId, 10) || 1) + 1, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'ready', callHistory: [], sessionAction: 'load_next_set' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
 	};
 
 	confirmAction = (title, message, action, buttonText = 'Confirm') => {
@@ -645,229 +809,464 @@ class LetsPlayBingo extends Component {
 		);
 	};
 
-	clearTable = () => {
-		this.cancelSpeech();
-		if (this.state.running === true) {
-			clearInterval(this.state.interval);
-		}
-		let clearedBalls = this.state.balls;
-		_.map(clearedBalls, (ball, index) => {
-			clearedBalls[index].active = false;
-			clearedBalls[index].called = false;
-		});
-		if (this.state.showAlert === true) {
-			this.closeAlert();
-		}
-		this.pushLiveCallReset();
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
-		this.setState({ balls: clearedBalls, newGame: true, running: false, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'cleared', callHistory: [], sessionAction: 'clear_felt' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
-	};
-
-	closeTable = () => {
-		this.cancelSpeech();
-		if (this.state.running === true) {
-			clearInterval(this.state.interval);
-		}
-		let closedBalls = this.state.balls;
-		_.map(closedBalls, (ball, index) => {
-			closedBalls[index].active = false;
-			closedBalls[index].called = false;
-		});
-		if (this.state.showAlert === true) {
-			this.closeAlert();
-		}
-		this.pushLiveCallReset();
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
-		this.setState({ balls: closedBalls, newGame: true, running: false, tableEmpty: true, tableOpen: false, tableOpening: false, playPhase: 'idle', callHistory: [], sessionAction: 'close_table', accessCodeInput: '', accessCodeVerified: false }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
-	};
-
-	hostTable = () => {
-		this.cancelSpeech();
-		if (this.state.running === true) {
-			clearInterval(this.state.interval);
-		}
-		let openedBalls = this.state.balls;
-		_.map(openedBalls, (ball, index) => {
-			openedBalls[index].active = false;
-			openedBalls[index].called = false;
-		});
-		if (this.state.showAlert === true) {
-			this.closeAlert();
-		}
-		this.pushLiveCallReset();
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
-		this.setState({ balls: openedBalls, newGame: true, running: false, tableEmpty: true, tableOpen: true, tableOpening: false, playPhase: 'hosted', callHistory: [], sessionAction: 'host_table' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
-	};
-
-	openTable = () => {
-		this.cancelSpeech();
-		if (this.state.running === true) {
-			clearInterval(this.state.interval);
-		}
-		if (this.state.showAlert === true) {
-			this.closeAlert();
-		}
-		this.pushLiveCallReset();
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
-		this.setState({ tableEmpty: true, tableOpen: true, tableOpening: true, running: false, newGame: true, playPhase: 'opening', callHistory: [], sessionAction: 'open_table' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-			this.tableOpeningTimeout = setTimeout(() => {
-				this.setState({ tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'on_deck', callHistory: [], sessionAction: 'open_table_ready' }, () => {
-					if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-				});
-			}, 10000);
-		});
-	};
-
-	setTable = () => {
-		if (this.state.showAlert === true) {
-			this.closeAlert();
-		}
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
-		this.setState({ tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'ready', callHistory: [], sessionAction: 'set_table' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
-	};
-
-	handleOpenTable = () => {
+	handleDraw = () => {
 		this.confirmAction(
-			'Host',
-			'Open the table and make the host present before live play begins. The table will remain open until the round is started, cleared, or the next set is loaded. Confirm to continue.',
-			this.hostTable,
-			'Host'
-		);
-	};
-
-	handleTableOpen = () => {
-		this.confirmAction(
-			'Open Table',
-			'Open the table for players and begin the join process before the board goes live. Confirm to continue.',
-			this.openTable,
-			'Open Table'
-		);
-	};
-
-	handleOpenPlay = () => {
-		this.confirmAction(
-			'Open Play',
-			'Open live play for the card set now on the table. Table and set changes will remain locked until the round is stopped or closed. Confirm to continue.',
-			this.startGame,
-			'Open Play'
+			'Draw',
+			'Start the live draw and begin calling numbers for the active board. Confirm to continue.',
+			() => {
+				this.startGame();
+				this.setState({ boardControlState: 'drawing' });
+			},
+			'Draw'
 		);
 	};
 
 	handleHoldDraw = () => {
 		this.confirmAction(
 			'Hold Draw',
-			'Place the live draw on hold for the current round. The table will stay locked in its current state until play resumes. Confirm to continue.',
-			this.pauseGame,
+			'Pause number calling for the current round. Confirm to continue.',
+			() => {
+				this.pauseGame();
+				this.setState({ boardControlState: 'paused' });
+			},
 			'Hold Draw'
 		);
 	};
 
-	handleResumeDraw = () => {
+	handleResume = () => {
 		this.confirmAction(
 			'Resume Draw',
-			'Resume the live draw and continue the current round. Table and set changes will remain restricted during live play. Confirm to continue.',
-			this.resumeGame,
+			'Resume number calling for the current round. Confirm to continue.',
+			() => {
+				this.resumeGame();
+				this.setState({ boardControlState: 'table_ready' });
+			},
 			'Resume Draw'
 		);
 	};
 
-	handleCallNextBall = () => {
-		this.confirmAction(
-			'Call Next Ball',
-			'Call the next ball while no live round is in play. This will update the board state. Confirm to continue.',
-			this.callNumber,
-			'Call Next Ball'
-		);
-	};
-
-	handleLoadNextSet = () => {
-		this.confirmAction(
-			'Load Next Set',
-			'Close the current table, reset the board, and load the next available card set for play. Use only after the round is closed or cleared. Confirm to continue.',
-			this.resetGame,
-			'Load Next Set'
-		);
-	};
-
 	handleBingo = () => {
-		this.confirmAction(
-			'Bingo',
-			'Close the current round on a bingo call and move the table into its post-win state. Confirm to continue.',
-			this.callBingo,
-			'Bingo'
-		);
+		this.pauseGame();
+		if (!this.state.bingoDetectedPin) {
+			this.setState({ bingoDetectedPin: this.createBingoPin() });
+		}
 	};
 
-	handleClearFelt = () => {
+	handleReset = () => {
 		this.confirmAction(
-			'Clear Felt',
-			'Clear all cards from the table and remove the current play setup. Use only when live play is not active. Confirm to continue.',
-			this.clearTable,
-			'Clear Felt'
+			'Reset',
+			'Reset the board, clear all called balls, and clear loaded session cards. Confirm to continue.',
+			this.resetBoard,
+			'Reset'
 		);
 	};
 
 	handleCloseTable = () => {
 		this.confirmAction(
 			'Close Table',
-			'Close the table and return to the closed state. No game will remain in session until the table is hosted or opened again. Confirm to continue.',
+			'Close the table, clear the active session, reset the board, and sign out the host. Confirm to continue.',
 			this.closeTable,
 			'Close Table'
 		);
 	};
 
-	handleSetTable = () => {
-		this.confirmAction(
-			'Set the Felt',
-			'Load the next eligible card set to the table and make it live for play. Only one live set can be on the table at a time. Confirm to continue.',
-			this.setTable,
-			'Set the Felt'
-		);
+	openRadio = async () => {
+		if (this.state.radioPlaying) {
+			this.stopRadioPlayback();
+			return;
+		}
+		if (!this.radioAudio) {
+			const audio = new Audio(radioStreamUrl);
+			audio.preload = 'none';
+			audio.crossOrigin = 'anonymous';
+			audio.addEventListener('pause', this.handleRadioAudioPause);
+			audio.addEventListener('ended', this.handleRadioAudioEnded);
+			audio.addEventListener('error', this.handleRadioAudioError);
+			audio.addEventListener('abort', this.handleRadioAudioError);
+			audio.addEventListener('emptied', this.handleRadioAudioError);
+			this.radioAudio = audio;
+		}
+		try {
+			await this.radioAudio.play();
+			this.setState({ radioPlaying: true });
+			await this.startRadioVisualizer();
+			this.startRadioMetadataPolling();
+		} catch (e) {
+			window.open(radioStreamUrl, '_blank', 'noopener,noreferrer');
+		}
 	};
 
-	handleAccessCodeChange = (event) => {
-		const digitsOnly = String(event.target.value || '').replace(/\D/g, '').slice(0, 8);
+	openHostAccessDialog = () => {
+		document.body.classList.add('backdrop-visible');
 		this.setState({
-			accessCodeInput: digitsOnly,
-			accessCodeVerified: digitsOnly === getCentralDateAccessCode(),
+			showHostAccessDialog: true,
+			hostAccessInput: '',
+			hostAccessError: '',
 		});
 	};
+
+	closeHostAccessDialog = () => {
+		if (!this.state.showConfirm && !this.state.showAlert && !this.state.showOpenTableDialog) {
+			document.body.classList.remove('backdrop-visible');
+		}
+		this.setState({
+			showHostAccessDialog: false,
+			hostAccessError: '',
+		});
+	};
+
+	handleHostAccessInputChange = (e) => {
+		const cleanedValue = String(e.target.value || '').replace(/[^\d]/g, '').slice(0, 8);
+		this.setState({
+			hostAccessInput: cleanedValue,
+			hostAccessError: '',
+		});
+	};
+
+	verifyHostAccess = () => {
+		const expected = getCentralDateAccessCode();
+		const provided = String(this.state.hostAccessInput || '').replace(/[^\d]/g, '').slice(0, 8);
+		if (provided !== expected) {
+			this.setState({ hostAccessError: 'Access Denied' });
+			return;
+		}
+		document.body.classList.remove('backdrop-visible');
+		this.setState({
+			showHostAccessDialog: false,
+			hostVerified: true,
+			boardControlState: 'host_ready',
+			hostAccessError: '',
+		});
+	};
+
+	openTableDialog = () => {
+		if (!this.state.hostVerified) {
+			return;
+		}
+		document.body.classList.add('backdrop-visible');
+		this.setState({ showOpenTableDialog: true });
+	};
+
+	closeOpenTableDialog = () => {
+		if (!this.state.showConfirm && !this.state.showAlert) {
+			document.body.classList.remove('backdrop-visible');
+		}
+		this.setState({ showOpenTableDialog: false });
+	};
+
+	handleOpenTableDealChange = (e) => {
+		this.setState({ openTableDeal: String(e.target.value || openTableDeals[0]) });
+	};
+
+	applyOpenTableDeal = () => {
+		const selectedDeal = String(this.state.openTableDeal || openTableDeals[0]);
+		const selectedIndex = Math.max(0, openTableDeals.indexOf(selectedDeal)) + 1;
+		document.body.classList.remove('backdrop-visible');
+		this.setState({
+			showOpenTableDialog: false,
+			selectedTableDeal: selectedDeal,
+			selectedTableDealIndex: selectedIndex,
+			boardControlState: 'table_ready',
+			bingoDetectedPin: '',
+		});
+	};
+
+	openOrderScreen = () => {
+		this.setState({ activeScreen: 'order' });
+	};
+
+	closeOrderScreen = () => {
+		this.setState({ activeScreen: 'caller', orderSaveMessage: '' });
+	};
+
+	openPlayScreen = () => {
+		this.setState({
+			activeScreen: 'join_session',
+			playLookupError: '',
+			playLookupLoading: false,
+		});
+	};
+
+	closePlayScreen = () => {
+		this.setState({
+			activeScreen: 'caller',
+		});
+	};
+
+	handleHeaderMenuChange = (e) => {
+		const selected = String(e.target.value || '');
+		const canJoinSession = Boolean(this.state.hostVerified && this.state.selectedTableDeal);
+		if (selected === 'board') {
+			this.setState({
+				headerMenuSelection: '',
+				activeScreen: 'caller',
+				orderSaveMessage: '',
+			});
+			return;
+		}
+		if (selected === 'join_session') {
+			if (!canJoinSession) {
+				this.setState({ headerMenuSelection: '' });
+				return;
+			}
+			this.setState({ headerMenuSelection: '' });
+			this.openPlayScreen();
+			return;
+		}
+		if (selected === 'order') {
+			this.setState({ headerMenuSelection: '' });
+			this.openOrderScreen();
+			return;
+		}
+		this.setState({ headerMenuSelection: selected });
+	};
+
+	handleOrderTotalChange = (e) => {
+		const cleanedValue = String(e.target.value || '').replace(/[^\d.]/g, '');
+		this.setState({ orderTotalInput: cleanedValue });
+	};
+
+	handleFamilyIdChange = (e) => {
+		const cleanedValue = String(e.target.value || '').replace(/[^\d]/g, '').slice(0, 5);
+		this.setState({ familyIdInput: cleanedValue });
+	};
+
+	handlePlayFamilyIdChange = (e) => {
+		const cleanedValue = String(e.target.value || '').replace(/[^\d]/g, '').slice(0, 5);
+		this.setState({
+			playFamilyIdInput: cleanedValue,
+			playLookupError: '',
+		});
+	};
+
+	loadPlayOrder = async () => {
+		const familyId = String(this.state.playFamilyIdInput || '').replace(/[^\d]/g, '').slice(0, 5);
+		const selectedGameIndex = parseInt(this.state.selectedTableDealIndex, 10) || 0;
+		if (!/^\d{5}$/.test(familyId)) {
+			this.setState({
+				playLookupError: 'Enter a valid 5 digit Family ID.',
+				playOrderData: null,
+				playCardDeck: [],
+				bingoDetectedPin: '',
+				playPage: 0,
+			});
+			return;
+		}
+		if (!this.state.hostVerified) {
+			this.setState({
+				playLookupError: 'Host must join first.',
+				playOrderData: null,
+				playCardDeck: [],
+				bingoDetectedPin: '',
+				playPage: 0,
+			});
+			return;
+		}
+		if (selectedGameIndex < 1 || selectedGameIndex > 6 || !this.state.selectedTableDeal) {
+			this.setState({
+				playLookupError: 'Open Table first to start a session.',
+				playOrderData: null,
+				playCardDeck: [],
+				bingoDetectedPin: '',
+				playPage: 0,
+			});
+			return;
+		}
+		this.setState({
+			playLookupLoading: true,
+			playLookupError: '',
+		});
+		try {
+			const response = await fetch(`/api/books/${familyId}?game=${selectedGameIndex}`);
+			if (!response.ok) {
+				throw new Error('not_found');
+			}
+			const result = await response.json();
+			const orderData = result && result.order ? result.order : null;
+			if (!orderData || typeof orderData.totalCards !== 'number') {
+				throw new Error('not_found');
+			}
+			const generatedDeck = generateRandomBingoDeck(orderData.totalCards);
+			this.setState({
+				playLookupLoading: false,
+				playLookupError: '',
+				playOrderData: orderData,
+				playCardDeck: generatedDeck,
+				bingoDetectedPin: '',
+				playPage: 0,
+			});
+		} catch (e) {
+			this.setState({
+				playLookupLoading: false,
+				playLookupError: 'Family ID not found.',
+				playOrderData: null,
+				playCardDeck: [],
+				bingoDetectedPin: '',
+				playPage: 0,
+			});
+		}
+	};
+
+	goToPreviousPlayPage = () => {
+		this.setState((prevState) => ({
+			playPage: Math.max(0, prevState.playPage - 1),
+		}));
+	};
+
+	goToNextPlayPage = () => {
+		const totalCards = parseInt(this.state.playOrderData && this.state.playOrderData.totalCards, 10) || 0;
+		const pageCount = Math.max(1, Math.ceil(totalCards / 4));
+		this.setState((prevState) => ({
+			playPage: Math.min(pageCount - 1, prevState.playPage + 1),
+		}));
+	};
+
+	downloadOrderJson = (payload) => {
+		const blob = new Blob([JSON.stringify(payload, null, 2)], {
+			type: 'application/json',
+		});
+		const downloadUrl = window.URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = downloadUrl;
+		link.download = 'Books.json';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		window.URL.revokeObjectURL(downloadUrl);
+	};
+
+	generateOrderJson = async (familyId, totalBooks) => {
+		const totalGames = 6;
+		const cardsPerGame = totalBooks;
+		const totalCards = totalBooks * totalGames;
+		const games = Array.from({ length: totalGames }, (_, index) => {
+			const gameNumber = index + 1;
+			const remainingCards = totalCards - (cardsPerGame * gameNumber);
+			return {
+				game: gameNumber,
+				familyId,
+				cards: cardsPerGame,
+				cardsRemaining: remainingCards,
+			};
+		});
+		const payload = {
+			familyId,
+			totalBooks,
+			totalGames,
+			totalCards,
+			games,
+		};
+		try {
+			const response = await fetch('/api/save-order-json', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(payload),
+			});
+			if (!response.ok) {
+				throw new Error('save_failed');
+			}
+			const result = await response.json();
+			this.setState({
+				orderSaveMessage: result && result.path
+					? `Updated ${result.fileName} for Family ID ${familyId} in ${result.path}`
+					: 'Saved Books.json',
+			});
+		} catch (e) {
+			this.downloadOrderJson(payload);
+			this.setState({
+				orderSaveMessage: 'Downloaded Books.json',
+			});
+		}
+	};
+
 
 	startGame = () => {
 		if (this.state.newGame) {
 			this.say("Let's Play Bingo!");
 		}
-		if (this.tableOpeningTimeout) clearTimeout(this.tableOpeningTimeout);
 		if (this.state.interval) {
 			clearInterval(this.state.interval);
 		}
 		const nextInterval = setInterval(this.callNumber, this.state.delay);
-		this.setState({ newGame: false, running: true, interval: nextInterval, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'active', sessionAction: 'open_play' }, () => {
+		this.setState({ newGame: false, running: true, interval: nextInterval }, () => {
 			this.callNumber();
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
 		});
 	};
 
-	callBingo = () => {
+	resetBoard = () => {
 		this.cancelSpeech();
-		if (this.state.running === true) {
+		if (this.state.interval) {
 			clearInterval(this.state.interval);
 		}
-		let bingoBalls = this.state.balls;
-		_.map(bingoBalls, (ball, index) => {
-			bingoBalls[index].active = false;
+		const resetBalls = _.mapObject(newGameState.balls, (ball) => ({ ...ball }));
+		try {
+			localStorage.removeItem('lpbclassic_current_call');
+		} catch (e) {}
+		document.body.classList.remove('backdrop-visible');
+		const nextPatternResetToken = (parseInt(this.state.patternResetToken, 10) || 0) + 1;
+		this.setState({
+			balls: resetBalls,
+			callHistory: [],
+			newGame: true,
+			running: false,
+			interval: 0,
+			showAlert: false,
+			showBackdrop: false,
+			playLookupError: '',
+			playLookupLoading: false,
+			playOrderData: null,
+			playCardDeck: [],
+			bingoDetectedPin: '',
+			showOpenTableDialog: false,
+			showHostAccessDialog: false,
+			hostAccessInput: '',
+			hostAccessError: '',
+			boardControlState: this.state.hostVerified ? 'host_ready' : 'needs_host',
+			playPage: 0,
+			patternResetToken: nextPatternResetToken,
 		});
-		this.setState({ balls: bingoBalls, newGame: true, running: false, interval: 0, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'bingo', sessionAction: 'bingo' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
+	};
+
+	closeTable = () => {
+		this.cancelSpeech();
+		if (this.state.interval) {
+			clearInterval(this.state.interval);
+		}
+		const resetBalls = _.mapObject(newGameState.balls, (ball) => ({ ...ball }));
+		try {
+			localStorage.removeItem('lpbclassic_current_call');
+		} catch (e) {}
+		document.body.classList.remove('backdrop-visible');
+		const nextPatternResetToken = (parseInt(this.state.patternResetToken, 10) || 0) + 1;
+		this.setState({
+			balls: resetBalls,
+			callHistory: [],
+			newGame: true,
+			running: false,
+			interval: 0,
+			showAlert: false,
+			showConfirm: false,
+			showBackdrop: false,
+			playFamilyIdInput: '',
+			playLookupError: '',
+			playLookupLoading: false,
+			playOrderData: null,
+			playCardDeck: [],
+			bingoDetectedPin: '',
+			showOpenTableDialog: false,
+			showHostAccessDialog: false,
+			hostAccessInput: '',
+			hostAccessError: '',
+			hostVerified: false,
+			activeScreen: 'caller',
+			headerMenuSelection: '',
+			selectedTableDeal: '',
+			selectedTableDealIndex: 0,
+			boardControlState: 'needs_host',
+			playPage: 0,
+			patternResetToken: nextPatternResetToken,
 		});
 	};
 
@@ -875,9 +1274,7 @@ class LetsPlayBingo extends Component {
 		if (this.state.interval) {
 			clearInterval(this.state.interval);
 		}
-		this.setState({ newGame: false, running: false, interval: 0, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'paused', sessionAction: 'hold_draw' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
+		this.setState({ newGame: false, running: false, interval: 0 });
 	};
 
 	resumeGame = () => {
@@ -885,9 +1282,7 @@ class LetsPlayBingo extends Component {
 			clearInterval(this.state.interval);
 		}
 		const nextInterval = setInterval(this.callNumber, this.state.delay);
-		this.setState({ newGame: false, running: true, interval: nextInterval, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: 'active', sessionAction: 'resume_draw' }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
+		this.setState({ newGame: false, running: true, interval: nextInterval });
 	};
 
 	/*
@@ -902,14 +1297,9 @@ class LetsPlayBingo extends Component {
 			this.setState({
 				delay: e.target.value,
 				interval: setInterval(this.callNumber, e.target.value),
-				tableEmpty: false,
-				tableOpen: true,
-				tableOpening: false,
-				playPhase: this.state.playPhase || 'active',
-				sessionAction: this.state.sessionAction || 'resume_draw',
 			});
 		} else {
-			this.setState({ delay: e.target.value, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: this.state.playPhase || 'ready', sessionAction: this.state.sessionAction || 'set_table' });
+			this.setState({ delay: e.target.value });
 		}
 	};
 
@@ -956,9 +1346,7 @@ class LetsPlayBingo extends Component {
 		const nextCallHistory = (Array.isArray(this.state.callHistory) ? this.state.callHistory : []).concat([
 			{ letter: newBall.letter, number: newBall.number },
 		]).slice(-75);
-		this.setState({ balls: balls, tableEmpty: false, tableOpen: true, tableOpening: false, playPhase: this.state.playPhase || 'active', callHistory: nextCallHistory, sessionAction: this.state.running ? (this.state.sessionAction || 'resume_draw') : (this.state.sessionAction || 'call_next_ball') }, () => {
-			if (this.isSharedHost && !this.isViewerMode && this.sharedSessionLoaded) this.pushSharedSession();
-		});
+		this.setState({ balls: balls, callHistory: nextCallHistory });
 		}
 	};
 
@@ -974,7 +1362,7 @@ class LetsPlayBingo extends Component {
 	};
 
 	get backdropClasses() {
-		return this.state.showBackdrop ? 'show' : 'hide';
+		return this.state.showBackdrop || this.state.showOpenTableDialog || this.state.showHostAccessDialog ? 'show' : 'hide';
 	}
 	get alertClasses() {
 		return this.state.showAlert ? 'show text-center' : 'hide';
@@ -987,69 +1375,15 @@ class LetsPlayBingo extends Component {
 		return new Date().getFullYear();
 	}
 
-	getTableViewState = () => {
-		const balls = this.state.balls || {};
-		const hasCalledBall = Object.keys(balls).some((key) => {
-			const ball = balls[key];
-			return ball && (ball.called || ball.active);
-		});
-		if (!!this.state.tableOpening) return 'opening';
-		if (!!this.state.tableOpen && !!this.state.tableEmpty) return 'open';
-		if (!!this.state.tableOpen && !this.state.tableEmpty) return 'board';
-		if (!!this.state.tableEmpty || (!this.state.running && !!this.state.newGame && !hasCalledBall)) {
-			return 'closed';
-		}
-		return 'board';
-	};
-
 	/*
 	 *  Render Method
 	 *  Displays the bingo page
 	 */
 	render() {
-		const tableViewState = this.getTableViewState();
-		const showAccessCodeGate = tableViewState === 'closed' && !this.state.accessCodeVerified;
-		const showAccessDenied = showAccessCodeGate && this.state.accessCodeInput.length === 8;
 		const ballList = Object.keys(this.state.balls || {}).map((key) => this.state.balls[key]).filter(Boolean);
 		const activeBall = ballList.find((ball) => ball && ball.active) || null;
-		const showIdleTable = tableViewState !== 'board';
-		const showHostButton = true;
-		const disableHostButton = tableViewState === 'closed' && !this.state.accessCodeVerified;
-		const showHostedOnlyControls = this.state.playPhase === 'hosted';
-		const showOnDeckControls =
-			tableViewState === 'board' &&
-			!this.state.running &&
-			this.state.playPhase === 'on_deck';
-		const showReadyControls =
-			tableViewState === 'board' &&
-			!this.state.running &&
-			this.state.playPhase === 'ready';
-		const showActiveControls =
-			tableViewState === 'board' &&
-			this.state.running &&
-			this.state.playPhase === 'active';
-		const showPausedControls =
-			tableViewState === 'board' &&
-			!this.state.running &&
-			this.state.playPhase === 'paused';
-		const showBingoControls =
-			tableViewState === 'board' &&
-			!this.state.running &&
-			this.state.playPhase === 'bingo';
-		const showClearedControls =
-			tableViewState === 'board' &&
-			!this.state.running &&
-			this.state.playPhase === 'cleared';
-		const showFullBoardControls =
-			tableViewState === 'board' && !showOnDeckControls && !showReadyControls && !showActiveControls && !showPausedControls && !showBingoControls && !showClearedControls;
-		const idleTableTitle = tableViewState === 'opening' ? 'Table Open' : 'Table Closed';
-		const idleTableCopy = tableViewState === 'opening'
-			? 'Host has opened the Table.'
-			: tableViewState === 'open'
-				? 'Host has joined the Table.'
-				: 'No game is currently in session.';
-		const idleLoadingLabel = tableViewState === 'opening' ? 'Joining' : 'Loading';
 		const totalCalls = Array.isArray(this.state.callHistory) ? this.state.callHistory.length : 0;
+		const totalCallsText = totalCalls > 0 ? String(totalCalls) : '—';
 		const previousCall = totalCalls > 1
 			? this.state.callHistory[totalCalls - 2]
 			: null;
@@ -1057,7 +1391,72 @@ class LetsPlayBingo extends Component {
 		const priorCallHistory = activeBall
 			? this.state.callHistory.slice(Math.max(totalCalls - 10, 0), Math.max(totalCalls - 1, 0))
 			: this.state.callHistory.slice(Math.max(totalCalls - 9, 0));
-		const previousBallSlots = Array.from({ length: 9 }, (_, index) => priorCallHistory[index] || null);
+		const previousBallSlots = Array.from({ length: 5 }, (_, index) => priorCallHistory[index] || null);
+		const orderTotal = Math.max(0, parseInt(this.state.orderTotalInput || '0', 10) || 0);
+		let remainingOrderTotal = orderTotal;
+		const orderAllocation = [...orderPackages]
+			.sort((a, b) => b.price - a.price)
+			.map((pkg) => {
+				const quantity = Math.floor(remainingOrderTotal / pkg.price);
+				remainingOrderTotal -= quantity * pkg.price;
+				return {
+					...pkg,
+					quantity,
+					subtotal: quantity * pkg.price,
+				};
+			});
+		const cartItems = orderAllocation.filter((pkg) => pkg.quantity > 0);
+		const totalBooks = cartItems.reduce((sum, pkg) => sum + (pkg.quantity * pkg.cardsPerGameCount), 0);
+		const totalCards = totalBooks * 6;
+		const isFamilyIdValid = /^\d{5}$/.test(this.state.familyIdInput || '');
+		const playTotalCards = parseInt(this.state.playOrderData && this.state.playOrderData.totalCards, 10) || 0;
+		const playCardsPerGame = parseInt(this.state.playOrderData && this.state.playOrderData.totalBooks, 10) || 0;
+		const playFamilyId = String(
+			(this.state.playOrderData && this.state.playOrderData.familyId) || this.state.playFamilyIdInput || ''
+		).replace(/[^\d]/g, '').slice(0, 5);
+		const playRoom = getPlayRoomMeta(playCardsPerGame);
+		const playPlayerPosition = parseInt(this.state.playOrderData && this.state.playOrderData.playerPosition, 10) || 1;
+		const playPlayerCount = parseInt(this.state.playOrderData && this.state.playOrderData.playerCount, 10) || 1;
+		const playPageCount = Math.max(1, Math.ceil(playTotalCards / 4));
+		const playPage = Math.min(this.state.playPage, Math.max(playPageCount - 1, 0));
+		const playStartCard = playTotalCards > 0 ? (playPage * 4) + 1 : 0;
+		const isJoinSessionScreen =
+			this.state.activeScreen === 'join_session' || this.state.activeScreen === 'play';
+		const isPlayCardsVisible = isJoinSessionScreen && !!this.state.playOrderData;
+		const priorCallHistoryForPlay = activeBall
+			? this.state.callHistory.slice(Math.max(totalCalls - 7, 0), Math.max(totalCalls - 1, 0))
+			: this.state.callHistory.slice(Math.max(totalCalls - 6, 0));
+		const previousBallSlotsForPlay = Array.from({ length: 6 }, (_, index) => priorCallHistoryForPlay[index] || null);
+		const playVisibleCards = Array.from(
+			{ length: Math.max(0, Math.min(4, playTotalCards - (playPage * 4))) },
+			(_, index) => playStartCard + index
+		);
+		const playCardDeck = Array.isArray(this.state.playCardDeck) ? this.state.playCardDeck : [];
+		const calledNumbersSet = new Set(
+			ballList
+				.filter((ball) => ball && ball.called)
+				.map((ball) => parseInt(ball.number, 10))
+				.filter((number) => !Number.isNaN(number))
+		);
+		const selectedPattern = getStoredPatternConfig();
+		const hasBingoCard = playCardDeck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern));
+		const bingoDetectedPin = this.state.bingoDetectedPin || '';
+		const radioNowPlayingParts = this.parseRadioNowPlayingParts(this.state.radioNowPlaying);
+		const radioVisualizerLevels = Array.isArray(this.state.radioVisualizerLevels)
+			? this.state.radioVisualizerLevels
+			: [];
+		const showRadioNowPlaying = !!(
+			this.state.radioPlaying &&
+			this.radioAudio &&
+			!this.radioAudio.paused &&
+			!this.radioAudio.ended
+		);
+		const hasSelectedTableDeal = Boolean(this.state.selectedTableDeal);
+		const selectedTableDealLine = hasSelectedTableDeal
+			? `${this.state.selectedTableDeal}`
+			: '';
+		const canJoinSession = Boolean(this.state.hostVerified && hasSelectedTableDeal);
+		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const getBallColor = (letter) => {
 			switch (letter) {
 				case 'B':
@@ -1074,94 +1473,48 @@ class LetsPlayBingo extends Component {
 					return 'white';
 			}
 		};
-		return (
-			<div>
-				<div id="backdrop" className={this.backdropClasses}></div>
-				<div id="disclaimer" className={this.alertClasses}>
-					<h4 className="no-margin">Bingo!</h4>
-					<p className="small-text">All of the bingo balls have been called!</p>
-					<p>
-						<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button> |{' '}
-						<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button> |{' '}
-						<button onClick={this.closeAlert}>Close</button>
-					</p>
-				</div>
-				<div id="confirmation" className={this.confirmClasses}>
-					<h4 className="no-margin">{this.state.confirmTitle}</h4>
-					<p className="small-text">{this.state.confirmMessage}</p>
-					<p>
-						<button className="lpb-btn lpb-btn-confirm" onClick={this.proceedConfirm}>{this.state.confirmButtonText}</button> |{' '}
-						<button className="lpb-btn lpb-btn-clear" onClick={this.closeConfirm}>Cancel</button>
-					</p>
-				</div>
-
-				<header>
-					<div className="row">
-						<div className="col c100">
-							<div className="logo-block">
-								<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
+		const callerBoardShell = (
+			<div className={`row lpb-board-shell${isPlayCardsVisible ? ' lpb-board-shell-compact' : ''}`}>
+				<div className="lpb-board-side lpb-board-stats">
+					<div className="lpb-call-summary-wrap notranslate">
+						<div className="lpb-call-summary">
+							<div className="lpb-call-summary-item">
+								<div className="lpb-call-summary-box">
+									<SevenSegmentText text={totalCallsText} variant="box" />
+								</div>
+								<div className="lpb-call-summary-label">Calls</div>
 							</div>
+							<div className="lpb-call-summary-item">
+								<div className="lpb-call-summary-box">
+									<SevenSegmentText text={previousCallText} variant="box" />
+								</div>
+								<div className="lpb-call-summary-label">Previous</div>
+							</div>
+							<div className="lpb-call-summary-game-inline">
+								{hasSelectedTableDeal ? selectedTableDealLine : '--'}
+							</div>
+						</div>
+						<div className="lpb-call-pattern-wrap">
+							<Pattern
+								resetToken={this.state.patternResetToken}
+								disabled={!this.state.newGame}
+							/>
 						</div>
 					</div>
-				</header>
-
-				<section id="board">
-					{showIdleTable ? (
-						<div className="row">
-							<div className="lpb-table-closed">
-								<div className="lpb-table-closed-card">
-									<img className="lpb-table-closed-logo" src={logo} alt="Let's Play Bingo Logo" />
-									<div className="lpb-table-closed-title">{idleTableTitle}</div>
-									<div className="lpb-table-closed-copy">{idleTableCopy}</div>
-									{tableViewState === 'opening' || (tableViewState === 'open' && this.state.sessionAction === 'host_table') ? (
-										<div className="lpb-table-open-loading" aria-live="polite">
-											<span className="lpb-table-open-loading-label">{idleLoadingLabel}</span>
-											<span className="lpb-table-open-loading-dots">
-												<span></span>
-												<span></span>
-												<span></span>
-											</span>
-										</div>
-									) : null}
+				</div>
+				<div className="lpb-board-center">
+						<div className="lpb-board-center-panel">
+							<BingoBoard balls={this.state.balls} />
+							<div className="lpb-board-current-ball-wrap">
+								<div className="lpb-board-current-ball-box">
+									<BallDisplay balls={this.state.balls} />
 								</div>
-							</div>
-						</div>
-					) : (
-						<>
-							<div className="row lpb-board-shell">
-								<div className="lpb-board-side lpb-board-stats">
-									<div className="lpb-call-summary-wrap notranslate">
-										<div className="lpb-call-summary">
-											<div className="lpb-call-summary-item">
-												<div className="lpb-call-summary-box">
-													<SevenSegmentText text={String(totalCalls)} variant="box" />
-												</div>
-												<div className="lpb-call-summary-label">Calls</div>
-											</div>
-											<div className="lpb-call-summary-item">
-												<div className="lpb-call-summary-box">
-													<SevenSegmentText text={previousCallText} variant="box" />
-												</div>
-												<div className="lpb-call-summary-label">Previous</div>
-											</div>
-										</div>
-										<div className="lpb-call-pattern-wrap">
-											<Pattern />
-										</div>
-									</div>
-								</div>
-								<div className="lpb-board-center">
-									<div className="lpb-board-center-panel">
-										<BingoBoard balls={this.state.balls} />
-									</div>
-								</div>
-								<div className="lpb-board-side lpb-board-ball">
-									<div className="lpb-board-ball-panel">
-										<BallDisplay balls={this.state.balls} />
-										<div className="lpb-call-history-grid notranslate" aria-label="Previous nine balls">
+								<div className="lpb-board-current-info-box">
+									{hasSelectedTableDeal ? (
+										<div className="lpb-call-history-strip notranslate" aria-label="Previous five balls">
 											{previousBallSlots.map((ball, index) => (
 												<div
-													key={ball ? `${ball.letter}${ball.number}-${index}` : `empty-${index}`}
+													key={ball ? `${ball.letter}${ball.number}-${index}` : `inline-empty-${index}`}
 													className="lpb-call-history-slot"
 												>
 													<div className={`lpb-mini-ball ${ball ? getBallColor(ball.letter) : 'lpb-mini-ball-empty'}`}>
@@ -1177,50 +1530,423 @@ class LetsPlayBingo extends Component {
 												</div>
 											))}
 										</div>
-									</div>
+									) : (
+										<div className="lpb-board-current-info-logo" aria-hidden="true">
+											<img src={logoLight} alt="Let's Play Bingo logo" />
+										</div>
+									)}
 								</div>
 							</div>
-						</>
-					)}
-				</section>
-
-				<section id="buttons">
-					<div className="row">
-						<div className="col c100">
-							{showAccessCodeGate ? (
-								<div className="lpb-access-code-wrap">
-									<label className="lpb-access-code-label" htmlFor="lpb-access-code">Access Code</label>
-									<input
-										id="lpb-access-code"
-										className="lpb-access-code-input"
-										type="password"
-										inputMode="numeric"
-										autoComplete="off"
-										maxLength={8}
-										value={this.state.accessCodeInput}
-										onChange={this.handleAccessCodeChange}
-									/>
-									{showAccessDenied ? (
-										<div className="lpb-access-code-denied">Access Denied</div>
-									) : null}
-								</div>
-							) : null}
-							{showHostButton ? (
-								<button className="lpb-btn lpb-btn-host" onClick={this.handleOpenTable} disabled={disableHostButton}>Host</button>
-							) : null}
-							<button className="lpb-btn lpb-btn-open-table" onClick={this.handleTableOpen}>Open Table</button>
-							<button className="lpb-btn lpb-btn-set" onClick={this.handleSetTable}>Set the Felt</button>
-							<button className="lpb-btn lpb-btn-open" onClick={this.handleOpenPlay}>Open Play</button>
-							<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
-							<button className="lpb-btn lpb-btn-resume" onClick={this.handleResumeDraw}>Resume Draw</button>
-							<button className="lpb-btn lpb-btn-next" onClick={this.handleCallNextBall}>Call Next Ball</button>
-							<button className="lpb-btn lpb-btn-reset" onClick={this.handleBingo}>Bingo</button>
-							<button className="lpb-btn lpb-btn-reset" onClick={this.handleLoadNextSet}>Load Next Set</button>
-							<button className="lpb-btn lpb-btn-clear" onClick={this.handleClearFelt}>Clear Felt</button>
-							<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
 						</div>
 					</div>
-				</section>
+			</div>
+		);
+		const controlsPanel = (
+			<div className="row lpb-buttons-controls-row">
+				<div className="col c100">
+					{this.state.activeScreen === 'order' ? (
+						<>
+							<button
+								className="lpb-btn lpb-btn-order"
+								onClick={() => this.generateOrderJson(this.state.familyIdInput, totalBooks)}
+								disabled={cartItems.length === 0 || !isFamilyIdValid}
+							>
+								Generate
+							</button>
+						</>
+					) : isJoinSessionScreen ? (
+						<div className="lpb-join-controls">
+							{hasBingoCard ? (
+								<button className="lpb-btn lpb-btn-bingo" onClick={this.handleBingo}>Bingo</button>
+							) : null}
+							{hasBingoCard && bingoDetectedPin ? (
+								<div className="lpb-bingo-pin">Bingo Pin: {bingoDetectedPin}</div>
+							) : null}
+						</div>
+					) : (
+						<div className="lpb-board-controls">
+							<div className="lpb-board-controls-buttons">
+								{!this.state.hostVerified || boardControlState === 'needs_host' ? (
+									<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host</button>
+								) : null}
+								{this.state.hostVerified && boardControlState === 'host_ready' ? (
+									<>
+										<button className="lpb-btn lpb-btn-open-table" onClick={this.openTableDialog}>Open Table</button>
+										<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+									</>
+								) : null}
+								{this.state.hostVerified && boardControlState === 'table_ready' ? (
+									<>
+										<button className="lpb-btn lpb-btn-open" onClick={this.handleDraw}>Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
+									</>
+								) : null}
+								{this.state.hostVerified && boardControlState === 'drawing' ? (
+									<>
+										<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
+									</>
+								) : null}
+								{this.state.hostVerified && boardControlState === 'paused' ? (
+									<>
+										<button className="lpb-btn lpb-btn-resume" onClick={this.handleResume}>Resume Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
+									</>
+								) : null}
+								<button className="lpb-btn lpb-btn-radio" onClick={this.openRadio}>Radio</button>
+							</div>
+							{showRadioNowPlaying ? (
+								<div className="lpb-radio-now-playing">
+									<img className="lpb-radio-now-playing-logo" src={radioLogoUrl} alt="95.7 The Boss" />
+									<div className="lpb-radio-now-playing-copy">
+										<div className="lpb-radio-visualizer" aria-hidden="true">
+											{radioVisualizerLevels.map((level, index) => (
+												<span
+													key={`radio-bar-${index}`}
+													className="lpb-radio-visualizer-bar"
+													style={{ transform: `scaleY(${level})` }}
+												></span>
+											))}
+										</div>
+										{radioNowPlayingParts.track ? (
+											<div className="lpb-radio-now-playing-track">{radioNowPlayingParts.track}</div>
+										) : null}
+										{radioNowPlayingParts.artist ? (
+											<div className="lpb-radio-now-playing-artist">{radioNowPlayingParts.artist}</div>
+										) : null}
+									</div>
+								</div>
+							) : null}
+						</div>
+					)}
+				</div>
+			</div>
+		);
+		return (
+			<div>
+				<div id="backdrop" className={this.backdropClasses}></div>
+				<div id="disclaimer" className={this.alertClasses}>
+					<h4 className="no-margin">Bingo!</h4>
+					<p className="small-text">All of the bingo balls have been called!</p>
+					<p>
+						<button onClick={this.closeAlert}>Close</button>
+					</p>
+				</div>
+				<div id="confirmation" className={this.confirmClasses}>
+					<h4 className="no-margin">{this.state.confirmTitle}</h4>
+					<p className="small-text">{this.state.confirmMessage}</p>
+					<p>
+						<button className="lpb-btn lpb-btn-confirm" onClick={this.proceedConfirm}>{this.state.confirmButtonText}</button> |{' '}
+						<button className="lpb-btn lpb-btn-clear" onClick={this.closeConfirm}>Cancel</button>
+					</p>
+				</div>
+				<div id="open-table-dialog" className={this.state.showOpenTableDialog ? 'show' : 'hide'}>
+					<h4 className="no-margin">Open Table</h4>
+					<p className="small-text">Select the game to open.</p>
+					<div className="lpb-open-table-field">
+						<label htmlFor="lpb-open-table-deal">Game</label>
+						<select
+							id="lpb-open-table-deal"
+							value={this.state.openTableDeal}
+							onChange={this.handleOpenTableDealChange}
+						>
+							{openTableDeals.map((dealName) => (
+								<option key={dealName} value={dealName}>
+									{dealName}
+								</option>
+							))}
+						</select>
+					</div>
+					<p>
+						<button className="lpb-btn lpb-btn-open-table" onClick={this.applyOpenTableDeal}>Apply</button> |{' '}
+						<button className="lpb-btn lpb-btn-clear" onClick={this.closeOpenTableDialog}>Cancel</button>
+					</p>
+				</div>
+				<div id="host-access-dialog" className={this.state.showHostAccessDialog ? 'show' : 'hide'}>
+					<h4 className="no-margin">Host Access</h4>
+					<p className="small-text">Enter today&apos;s 8 digit date (CT) to unlock host controls.</p>
+					<div className="lpb-open-table-field">
+						<label htmlFor="lpb-host-access-input">Access Code</label>
+						<input
+							id="lpb-host-access-input"
+							type="text"
+							inputMode="numeric"
+							maxLength="8"
+							value={this.state.hostAccessInput}
+							onChange={this.handleHostAccessInputChange}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter') this.verifyHostAccess();
+							}}
+						/>
+					</div>
+					{this.state.hostAccessError ? (
+						<p className="small-text lpb-host-access-error">{this.state.hostAccessError}</p>
+					) : null}
+					<p>
+						<button className="lpb-btn lpb-btn-host" onClick={this.verifyHostAccess}>Enter</button> |{' '}
+						<button className="lpb-btn lpb-btn-clear" onClick={this.closeHostAccessDialog}>Cancel</button>
+					</p>
+				</div>
+
+				<header>
+					<div className="row">
+						<div className="col c100">
+							<div className="logo-block">
+								<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
+								<div className="lpb-header-menu">
+									<select
+										id="lpb-header-menu-select"
+										value={this.state.headerMenuSelection}
+										onChange={this.handleHeaderMenuChange}
+									>
+										<option value="" disabled hidden>Menu</option>
+										<option value="board">Board</option>
+										{canJoinSession ? (
+											<option value="join_session">Join a Session</option>
+										) : null}
+										<option value="order">Order</option>
+									</select>
+								</div>
+							</div>
+						</div>
+					</div>
+				</header>
+
+				{this.state.activeScreen === 'order' ? (
+					<section id="board">
+						<div className="row lpb-order-shell">
+							<div className="lpb-order-panel">
+								<div className="lpb-order-header">
+									<h2>Order</h2>
+									<p>Choose your level of play. Each package includes automatic game play for the full session, with your cards entered into every round based on the package you select.</p>
+								</div>
+								<div className="lpb-order-builder">
+									<div className="lpb-order-field">
+										<label htmlFor="lpb-family-id">Family ID</label>
+										<input
+											id="lpb-family-id"
+											type="text"
+											inputMode="numeric"
+											maxLength="5"
+											value={this.state.familyIdInput}
+											onChange={this.handleFamilyIdChange}
+										/>
+									</div>
+									<div className="lpb-order-field">
+										<label htmlFor="lpb-order-total">Order Total</label>
+										<input
+											id="lpb-order-total"
+											type="text"
+											inputMode="numeric"
+											value={this.state.orderTotalInput}
+											onChange={this.handleOrderTotalChange}
+										/>
+									</div>
+									<div className="lpb-order-cart">
+										<div className="lpb-order-cart-header">Cart</div>
+										{cartItems.length > 0 ? (
+											<>
+												{cartItems.map((pkg) => (
+													<div key={`${pkg.tier}-cart`} className="lpb-order-cart-row">
+														<div className="lpb-order-cart-tier">
+															<div className="lpb-order-cart-tier-name">{pkg.quantity} x {pkg.tier}</div>
+															<div className="lpb-order-cart-tier-meta">{pkg.cardsPerGame}</div>
+															<div className="lpb-order-cart-tier-meta">6 games</div>
+														</div>
+														<div className="lpb-order-cart-subtotal">
+															${pkg.subtotal}
+														</div>
+													</div>
+												))}
+												<div className="lpb-order-cart-row lpb-order-cart-total">
+													<div>Total Cards</div>
+													<div>{totalCards}</div>
+												</div>
+												<div className="lpb-order-cart-row lpb-order-cart-total">
+													<div>Total Cards Per Game</div>
+													<div>{totalBooks}</div>
+												</div>
+												<div className="lpb-order-cart-row lpb-order-cart-total">
+													<div>Total Applied</div>
+													<div>${orderTotal - remainingOrderTotal}</div>
+												</div>
+												<div className="lpb-order-cart-row lpb-order-cart-remainder">
+													<div>Unapplied Balance</div>
+													<div>${remainingOrderTotal}</div>
+												</div>
+											</>
+										) : (
+											<div className="lpb-order-cart-empty">Enter an order total to build the cart.</div>
+										)}
+										{this.state.orderSaveMessage ? (
+											<div className="lpb-order-cart-status">{this.state.orderSaveMessage}</div>
+										) : null}
+									</div>
+								</div>
+								<div className="lpb-order-grid">
+									{orderPackages.map((pkg) => (
+										<div key={pkg.tier} className={`lpb-order-card lpb-order-card-${pkg.tier.toLowerCase()}`}>
+											<div className="lpb-order-card-title">
+												{pkg.tier} - {pkg.name}
+											</div>
+											<div className="lpb-order-card-price">${pkg.price}</div>
+											<div className="lpb-order-card-meta">{pkg.cardsPerGame}</div>
+											<div className="lpb-order-card-copy">{pkg.description}</div>
+										</div>
+									))}
+								</div>
+							</div>
+						</div>
+					</section>
+				) : isJoinSessionScreen ? (
+					<section id="board">
+		<div className={`row lpb-play-shell lpb-play-panel lpb-play-room lpb-play-room-${playRoom.key}`}>
+							<div className="lpb-play-lookup-inline">
+								<div className="lpb-play-inline-field">
+									<label htmlFor="lpb-play-family-id-inline">Family ID</label>
+									<input
+										id="lpb-play-family-id-inline"
+										type="text"
+										inputMode="numeric"
+										maxLength="5"
+										value={this.state.playFamilyIdInput}
+										onChange={this.handlePlayFamilyIdChange}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter') {
+												this.loadPlayOrder();
+											}
+										}}
+									/>
+								</div>
+								<button
+									className="lpb-btn lpb-btn-order"
+									onClick={this.loadPlayOrder}
+									disabled={this.state.playLookupLoading}
+								>
+									{this.state.playLookupLoading ? 'Checking...' : 'Enter'}
+								</button>
+							</div>
+							{this.state.playLookupError ? (
+								<div className="lpb-play-error">{this.state.playLookupError}</div>
+							) : null}
+							{this.state.playOrderData ? (
+								<div className="lpb-play-view">
+									<div className="lpb-play-topbar">
+										<div className="lpb-play-room-title">{playRoom.title}</div>
+										<div className="lpb-play-player-count">
+											Player {playPlayerPosition} of {playPlayerCount}
+										</div>
+									</div>
+									<div className="lpb-play-room-meta">
+										<span className="lpb-play-room-welcome">Welcome:</span> {playRoom.welcome}
+									</div>
+									<div className="lpb-play-call-row notranslate" aria-label="Current and previous six balls">
+										<div className="lpb-play-call-row-item lpb-play-call-current">
+											<div className={`lpb-mini-ball ${activeBall ? getBallColor(activeBall.letter) : 'lpb-mini-ball-empty'}`}>
+												<div className="lpb-mini-ball-content">
+													{activeBall ? (
+														<span>
+															<span className="ball-letter">{activeBall.letter}</span>
+															<span className="ball-number">{activeBall.number}</span>
+														</span>
+													) : null}
+												</div>
+											</div>
+										</div>
+										<div className="lpb-play-call-divider" aria-hidden="true"></div>
+										{previousBallSlotsForPlay.map((ball, index) => (
+											<div
+												key={ball ? `${ball.letter}${ball.number}-play-row-${index}` : `play-row-empty-${index}`}
+												className="lpb-play-call-row-item"
+											>
+												<div className={`lpb-mini-ball ${ball ? getBallColor(ball.letter) : 'lpb-mini-ball-empty'}`}>
+													<div className="lpb-mini-ball-content">
+														{ball ? (
+															<span>
+																<span className="ball-letter">{ball.letter}</span>
+																<span className="ball-number">{ball.number}</span>
+															</span>
+														) : null}
+													</div>
+												</div>
+											</div>
+										))}
+									</div>
+									<div className="lpb-play-carousel">
+										<button
+											className="lpb-play-arrow"
+											onClick={this.goToPreviousPlayPage}
+											disabled={playPage === 0}
+											aria-label="Previous cards"
+										>
+											&lt;
+										</button>
+										<div className={`lpb-play-cards lpb-play-cards-${playRoom.key}`}>
+											{playVisibleCards.map((cardNumber) => {
+												const cardData = playCardDeck[cardNumber - 1] || null;
+												return (
+													<div key={`play-card-${cardNumber}`} className="lpb-play-card">
+														<div className="lpb-play-card-board notranslate">
+															{bingoLetters.map((letter) => (
+																<div key={`play-card-${cardNumber}-${letter}`} className="pattern-col">
+																	<div className="pattern-letter">{letter}</div>
+																	{Array.from({ length: 5 }, (_, index) => {
+																		const column = cardData && Array.isArray(cardData[letter]) ? cardData[letter] : [];
+																		const value = column[index];
+																		const marked = isMarkedCellValue(value, calledNumbersSet);
+																		return (
+																			<div
+																				key={`play-card-${cardNumber}-${letter}-cell-${index + 1}`}
+																				className={`pattern-slot${value === 'FREE' ? ' lpb-play-card-free' : ''}${marked ? ' lpb-play-card-marked' : ''}`}
+																			>
+																				{value === 'FREE' ? (
+																					<span className="lpb-play-card-free-text">FREE</span>
+																				) : (value || '\u00a0')}
+																			</div>
+																		);
+																	})}
+																</div>
+															))}
+														</div>
+														<div className="lpb-play-card-bcin">
+															BCIN: {getBcinValue(playFamilyId, playTotalCards, cardNumber - 1)}
+														</div>
+													</div>
+												);
+											})}
+										</div>
+										<button
+											className="lpb-play-arrow"
+											onClick={this.goToNextPlayPage}
+											disabled={playPage >= playPageCount - 1}
+											aria-label="Next cards"
+										>
+											&gt;
+										</button>
+									</div>
+									<div className="lpb-play-page-indicator">
+										Showing {playVisibleCards.length > 0 ? `${playStartCard}-${playStartCard + playVisibleCards.length - 1}` : '0'} of {playTotalCards}
+									</div>
+								</div>
+							) : null}
+						</div>
+					</section>
+				) : (
+					<section id="board">
+						<div className="row lpb-board-stack">
+							{callerBoardShell}
+							<section id="buttons" className="lpb-buttons-attached">
+								{controlsPanel}
+							</section>
+						</div>
+					</section>
+				)}
+
+				{this.state.activeScreen === 'order' || isJoinSessionScreen ? (
+					<section id="buttons" className="lpb-buttons-floating">
+						{controlsPanel}
+					</section>
+				) : null}
 
 				<footer>
 					<div className="row">

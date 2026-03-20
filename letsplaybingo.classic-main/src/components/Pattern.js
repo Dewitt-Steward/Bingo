@@ -7,18 +7,20 @@
 import React from "react";
 import _ from "underscore";
 
+const emptyPattern = {
+	B: [false, false, false, false, false],
+	I: [false, false, false, false, false],
+	N: [false, false, false, false, false],
+	G: [false, false, false, false, false],
+	O: [false, false, false, false, false],
+};
+
 class Pattern extends React.Component {
 	constructor(props) {
 		super(props);
 		this.state = {
 			selected: null,
-			pattern: {
-				B: [false, false, false, false, false],
-				I: [false, false, false, false, false],
-				N: [false, false, false, false, false],
-				G: [false, false, false, false, false],
-				O: [false, false, false, false, false],
-			},
+			pattern: { ...emptyPattern },
 			presets: {
 				"6 Pack As Shown": {
 					B: [true, true, false, false, false],
@@ -553,7 +555,14 @@ class Pattern extends React.Component {
 		}
 	}
 
-	componentDidUpdate() {
+	componentDidUpdate(prevProps) {
+		if (prevProps && prevProps.resetToken !== this.props.resetToken) {
+			this.setState({
+				selected: null,
+				pattern: { ...emptyPattern },
+			});
+			return;
+		}
 		localStorage.setItem("lpbclassicpattern", JSON.stringify(this.state));
 	}
 
@@ -567,13 +576,7 @@ class Pattern extends React.Component {
 		if (!selectedValue) {
 			this.setState({
 				selected: null,
-				pattern: {
-					B: [false, false, false, false, false],
-					I: [false, false, false, false, false],
-					N: [false, false, false, false, false],
-					G: [false, false, false, false, false],
-					O: [false, false, false, false, false],
-				},
+				pattern: { ...emptyPattern },
 			});
 		} else {
 			this.setState({
@@ -610,8 +613,9 @@ class Pattern extends React.Component {
 					name="patternselect"
 					className="pattern-select"
 					value={this.state.selected || ''}
-					onChange={this.choosePattern}>
-					<option value="" disabled>Choose Pattern</option>
+					onChange={this.choosePattern}
+					disabled={!!this.props.disabled}>
+					<option value="">Choose a Pattern</option>
 					{patternArray.map((option) => (
 						<option key={option.value} value={option.value}>{option.label}</option>
 					))}

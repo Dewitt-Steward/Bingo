@@ -11,7 +11,6 @@ import logo from "../logo.svg";
 class BallDisplay extends React.Component {
 	render() {
 		let currentBall = _.where(this.props.balls, { active: true })[0];
-		const totalCalls = _.where(this.props.balls, { called: true }).length;
 		if (currentBall) {
 			let color = "white";
 			switch (currentBall.letter) {
@@ -33,28 +32,30 @@ class BallDisplay extends React.Component {
 				default:
 					break;
 			}
-			return (
-				<div className="lpb-ball-display">
-					<div id="ball" className={color + " relative notranslate"}>
-						<div id="ballcount">{totalCalls}</div>
-						<div className="content">
-							<span>
-								<span className="ball-letter">{currentBall.letter}</span>
-								<span className="ball-number">{currentBall.number}</span>
-							</span>
+				return (
+					<div className="lpb-ball-display">
+						<div className="lpb-ball-display-stage">
+							<div id="ball" className={color + " relative notranslate"}>
+								<div className="content">
+									<span>
+									<span className="ball-letter">{currentBall.letter}</span>
+									<span className="ball-number">{currentBall.number}</span>
+								</span>
+							</div>
 						</div>
 					</div>
 				</div>
 			);
 		} else {
-			return (
-				<div className="lpb-ball-display">
-					<div id="ball" className="white relative notranslate">
-						<div id="ballcount">{totalCalls}</div>
-						<div className="content">
-							<span>
-								<img src={logo} alt="Lets Play Bingo Logo" />
-							</span>
+				return (
+					<div className="lpb-ball-display">
+						<div className="lpb-ball-display-stage">
+							<div id="ball" className="white relative notranslate">
+								<div className="content">
+									<span>
+									<img src={logo} alt="Lets Play Bingo Logo" />
+								</span>
+							</div>
 						</div>
 					</div>
 				</div>
