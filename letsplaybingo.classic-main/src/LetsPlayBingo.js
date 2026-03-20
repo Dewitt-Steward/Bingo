@@ -1738,26 +1738,28 @@ class LetsPlayBingo extends Component {
 									<p>Choose your level of play. Each package includes automatic game play for the full session, with your cards entered into every round based on the package you select.</p>
 								</div>
 								<div className="lpb-order-builder">
-									<div className="lpb-order-field">
-										<label htmlFor="lpb-family-id">Family ID</label>
-										<input
-											id="lpb-family-id"
-											type="text"
-											inputMode="numeric"
-											maxLength="5"
-											value={this.state.familyIdInput}
-											onChange={this.handleFamilyIdChange}
-										/>
-									</div>
-									<div className="lpb-order-field">
-										<label htmlFor="lpb-order-total">Order Total</label>
-										<input
-											id="lpb-order-total"
-											type="text"
-											inputMode="numeric"
-											value={this.state.orderTotalInput}
-											onChange={this.handleOrderTotalChange}
-										/>
+									<div className="lpb-order-fields">
+										<div className="lpb-order-field">
+											<label htmlFor="lpb-family-id">Family ID</label>
+											<input
+												id="lpb-family-id"
+												type="text"
+												inputMode="numeric"
+												maxLength="5"
+												value={this.state.familyIdInput}
+												onChange={this.handleFamilyIdChange}
+											/>
+										</div>
+										<div className="lpb-order-field">
+											<label htmlFor="lpb-order-total">Order Total</label>
+											<input
+												id="lpb-order-total"
+												type="text"
+												inputMode="numeric"
+												value={this.state.orderTotalInput}
+												onChange={this.handleOrderTotalChange}
+											/>
+										</div>
 									</div>
 									<div className="lpb-order-cart">
 										<div className="lpb-order-cart-header">Cart</div>
