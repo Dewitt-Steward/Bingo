@@ -1776,7 +1776,7 @@ class LetsPlayBingo extends Component {
 					) : (
 						<div className="lpb-board-controls">
 							<div className="lpb-board-controls-buttons">
-								{boardControlState === 'needs_host' ? (
+								{!this.state.hostVerified ? (
 									<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host</button>
 								) : null}
 								{this.state.hostVerified && boardControlState === 'host_ready' ? (
