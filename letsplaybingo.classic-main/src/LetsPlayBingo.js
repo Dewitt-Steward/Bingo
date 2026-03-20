@@ -352,6 +352,9 @@ class LetsPlayBingo extends Component {
 		this.radioSourceNode = null;
 		this.radioAnimationFrame = null;
 		this.radioFrequencyData = null;
+		this.sharedSessionPoller = null;
+		this.sharedSessionUpdatedAt = '';
+		this.isApplyingSharedSession = false;
 		try {
 			window.name = 'lpb_caller_window';
 		} catch (e) {}
@@ -518,7 +521,19 @@ class LetsPlayBingo extends Component {
 		});
 	}
 
+	componentDidMount() {
+		this.fetchSharedSession();
+		this.startSharedSessionPolling();
+	}
+
 	componentWillUnmount() {
+		if (this.sharedSessionPoller) {
+			clearInterval(this.sharedSessionPoller);
+			this.sharedSessionPoller = null;
+		}
+		if (this.state.interval) {
+			clearInterval(this.state.interval);
+		}
 		this.stopRadioVisualizer();
 		if (this.radioMetadataTimer) {
 			clearInterval(this.radioMetadataTimer);
@@ -538,6 +553,117 @@ class LetsPlayBingo extends Component {
 		}
 		return undefined;
 	}
+
+	getSharedSessionSnapshot = (stateRef) => {
+		const sourceState = stateRef || this.state;
+		const sourceBalls = sourceState && sourceState.balls ? sourceState.balls : {};
+		return {
+			balls: _.mapObject(newGameState.balls, (baseBall, key) => {
+				const ball = sourceBalls[key] || baseBall;
+				return {
+					letter: baseBall.letter,
+					number: baseBall.number,
+					called: !!ball.called,
+					active: !!ball.active,
+				};
+			}),
+			callHistory: (Array.isArray(sourceState.callHistory) ? sourceState.callHistory : [])
+				.map((entry) => ({
+					letter: String((entry && entry.letter) || '').slice(0, 1),
+					number: parseInt(entry && entry.number, 10) || 0,
+				}))
+				.filter((entry) => entry.letter && entry.number > 0)
+				.slice(-75),
+			newGame: !!sourceState.newGame,
+			running: !!sourceState.running,
+			selectedTableDeal: String(sourceState.selectedTableDeal || ''),
+			selectedTableDealIndex: parseInt(sourceState.selectedTableDealIndex, 10) || 0,
+			boardControlState: String(sourceState.boardControlState || 'needs_host'),
+			bingoDetectedPin: String(sourceState.bingoDetectedPin || ''),
+			patternResetToken: parseInt(sourceState.patternResetToken, 10) || 0,
+		};
+	};
+
+	applySharedSessionState = (session) => {
+		if (!session || typeof session !== 'object') {
+			return;
+		}
+		if (this.state.interval && !session.running) {
+			clearInterval(this.state.interval);
+		}
+		const nextBalls = _.mapObject(newGameState.balls, (baseBall, key) => {
+			const ball = session.balls && session.balls[key] ? session.balls[key] : baseBall;
+			return {
+				letter: baseBall.letter,
+				number: baseBall.number,
+				called: !!ball.called,
+				active: !!ball.active,
+			};
+		});
+		this.isApplyingSharedSession = true;
+		this.setState(
+			{
+				balls: nextBalls,
+				callHistory: Array.isArray(session.callHistory) ? session.callHistory.slice(-75) : [],
+				newGame: typeof session.newGame === 'boolean' ? session.newGame : true,
+				running: typeof session.running === 'boolean' ? session.running : false,
+				selectedTableDeal: String(session.selectedTableDeal || ''),
+				selectedTableDealIndex: parseInt(session.selectedTableDealIndex, 10) || 0,
+				boardControlState: String(session.boardControlState || 'needs_host'),
+				bingoDetectedPin: String(session.bingoDetectedPin || ''),
+				patternResetToken: parseInt(session.patternResetToken, 10) || 0,
+			},
+			() => {
+				this.isApplyingSharedSession = false;
+			}
+		);
+	};
+
+	fetchSharedSession = async () => {
+		try {
+			const response = await fetch('/api/session');
+			if (!response.ok) {
+				return;
+			}
+			const result = await response.json();
+			const nextUpdatedAt = result && result.updatedAt ? String(result.updatedAt) : '';
+			if (nextUpdatedAt && nextUpdatedAt === this.sharedSessionUpdatedAt) {
+				return;
+			}
+			this.sharedSessionUpdatedAt = nextUpdatedAt;
+			this.applySharedSessionState(result && result.session ? result.session : null);
+		} catch (e) {}
+	};
+
+	startSharedSessionPolling = () => {
+		if (this.sharedSessionPoller) {
+			clearInterval(this.sharedSessionPoller);
+		}
+		this.sharedSessionPoller = setInterval(() => {
+			this.fetchSharedSession();
+		}, 1500);
+	};
+
+	publishSharedSession = async (stateRef) => {
+		try {
+			const response = await fetch('/api/session', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					session: this.getSharedSessionSnapshot(stateRef),
+				}),
+			});
+			if (!response.ok) {
+				return;
+			}
+			const result = await response.json();
+			if (result && result.updatedAt) {
+				this.sharedSessionUpdatedAt = String(result.updatedAt);
+			}
+		} catch (e) {}
+	};
 
 	stopRadioVisualizer = () => {
 		if (this.radioAnimationFrame) {
@@ -815,7 +941,9 @@ class LetsPlayBingo extends Component {
 			'Start the live draw and begin calling numbers for the active board. Confirm to continue.',
 			() => {
 				this.startGame();
-				this.setState({ boardControlState: 'drawing' });
+				this.setState({ boardControlState: 'drawing' }, () => {
+					this.publishSharedSession();
+				});
 			},
 			'Draw'
 		);
@@ -827,7 +955,9 @@ class LetsPlayBingo extends Component {
 			'Pause number calling for the current round. Confirm to continue.',
 			() => {
 				this.pauseGame();
-				this.setState({ boardControlState: 'paused' });
+				this.setState({ boardControlState: 'paused' }, () => {
+					this.publishSharedSession();
+				});
 			},
 			'Hold Draw'
 		);
@@ -839,7 +969,9 @@ class LetsPlayBingo extends Component {
 			'Resume number calling for the current round. Confirm to continue.',
 			() => {
 				this.resumeGame();
-				this.setState({ boardControlState: 'table_ready' });
+				this.setState({ boardControlState: 'table_ready' }, () => {
+					this.publishSharedSession();
+				});
 			},
 			'Resume Draw'
 		);
@@ -848,7 +980,9 @@ class LetsPlayBingo extends Component {
 	handleBingo = () => {
 		this.pauseGame();
 		if (!this.state.bingoDetectedPin) {
-			this.setState({ bingoDetectedPin: this.createBingoPin() });
+			this.setState({ bingoDetectedPin: this.createBingoPin() }, () => {
+				this.publishSharedSession();
+			});
 		}
 	};
 
@@ -962,13 +1096,18 @@ class LetsPlayBingo extends Component {
 		const selectedDeal = String(this.state.openTableDeal || openTableDeals[0]);
 		const selectedIndex = Math.max(0, openTableDeals.indexOf(selectedDeal)) + 1;
 		document.body.classList.remove('backdrop-visible');
-		this.setState({
-			showOpenTableDialog: false,
-			selectedTableDeal: selectedDeal,
-			selectedTableDealIndex: selectedIndex,
-			boardControlState: 'table_ready',
-			bingoDetectedPin: '',
-		});
+		this.setState(
+			{
+				showOpenTableDialog: false,
+				selectedTableDeal: selectedDeal,
+				selectedTableDealIndex: selectedIndex,
+				boardControlState: 'table_ready',
+				bingoDetectedPin: '',
+			},
+			() => {
+				this.publishSharedSession();
+			}
+		);
 	};
 
 	openOrderScreen = () => {
@@ -995,7 +1134,7 @@ class LetsPlayBingo extends Component {
 
 	handleHeaderMenuChange = (e) => {
 		const selected = String(e.target.value || '');
-		const canJoinSession = Boolean(this.state.hostVerified && this.state.selectedTableDeal);
+		const canJoinSession = Boolean(this.state.selectedTableDeal);
 		if (selected === 'board') {
 			this.setState({
 				headerMenuSelection: '',
@@ -1045,16 +1184,6 @@ class LetsPlayBingo extends Component {
 		if (!/^\d{5}$/.test(familyId)) {
 			this.setState({
 				playLookupError: 'Enter a valid 5 digit Family ID.',
-				playOrderData: null,
-				playCardDeck: [],
-				bingoDetectedPin: '',
-				playPage: 0,
-			});
-			return;
-		}
-		if (!this.state.hostVerified) {
-			this.setState({
-				playLookupError: 'Host must join first.',
 				playOrderData: null,
 				playCardDeck: [],
 				bingoDetectedPin: '',
@@ -1208,6 +1337,7 @@ class LetsPlayBingo extends Component {
 		}
 		const nextInterval = setInterval(this.callNumber, this.state.delay);
 		this.setState({ newGame: false, running: true, interval: nextInterval }, () => {
+			this.publishSharedSession();
 			this.callNumber();
 		});
 	};
@@ -1223,27 +1353,32 @@ class LetsPlayBingo extends Component {
 		} catch (e) {}
 		document.body.classList.remove('backdrop-visible');
 		const nextPatternResetToken = (parseInt(this.state.patternResetToken, 10) || 0) + 1;
-		this.setState({
-			balls: resetBalls,
-			callHistory: [],
-			newGame: true,
-			running: false,
-			interval: 0,
-			showAlert: false,
-			showBackdrop: false,
-			playLookupError: '',
-			playLookupLoading: false,
-			playOrderData: null,
-			playCardDeck: [],
-			bingoDetectedPin: '',
-			showOpenTableDialog: false,
-			showHostAccessDialog: false,
-			hostAccessInput: '',
-			hostAccessError: '',
-			boardControlState: this.state.hostVerified ? 'host_ready' : 'needs_host',
-			playPage: 0,
-			patternResetToken: nextPatternResetToken,
-		});
+		this.setState(
+			{
+				balls: resetBalls,
+				callHistory: [],
+				newGame: true,
+				running: false,
+				interval: 0,
+				showAlert: false,
+				showBackdrop: false,
+				playLookupError: '',
+				playLookupLoading: false,
+				playOrderData: null,
+				playCardDeck: [],
+				bingoDetectedPin: '',
+				showOpenTableDialog: false,
+				showHostAccessDialog: false,
+				hostAccessInput: '',
+				hostAccessError: '',
+				boardControlState: this.state.hostVerified ? 'host_ready' : 'needs_host',
+				playPage: 0,
+				patternResetToken: nextPatternResetToken,
+			},
+			() => {
+				this.publishSharedSession();
+			}
+		);
 	};
 
 	closeTable = () => {
@@ -1257,41 +1392,48 @@ class LetsPlayBingo extends Component {
 		} catch (e) {}
 		document.body.classList.remove('backdrop-visible');
 		const nextPatternResetToken = (parseInt(this.state.patternResetToken, 10) || 0) + 1;
-		this.setState({
-			balls: resetBalls,
-			callHistory: [],
-			newGame: true,
-			running: false,
-			interval: 0,
-			showAlert: false,
-			showConfirm: false,
-			showBackdrop: false,
-			playFamilyIdInput: '',
-			playLookupError: '',
-			playLookupLoading: false,
-			playOrderData: null,
-			playCardDeck: [],
-			bingoDetectedPin: '',
-			showOpenTableDialog: false,
-			showHostAccessDialog: false,
-			hostAccessInput: '',
-			hostAccessError: '',
-			hostVerified: false,
-			activeScreen: 'caller',
-			headerMenuSelection: '',
-			selectedTableDeal: '',
-			selectedTableDealIndex: 0,
-			boardControlState: 'needs_host',
-			playPage: 0,
-			patternResetToken: nextPatternResetToken,
-		});
+		this.setState(
+			{
+				balls: resetBalls,
+				callHistory: [],
+				newGame: true,
+				running: false,
+				interval: 0,
+				showAlert: false,
+				showConfirm: false,
+				showBackdrop: false,
+				playFamilyIdInput: '',
+				playLookupError: '',
+				playLookupLoading: false,
+				playOrderData: null,
+				playCardDeck: [],
+				bingoDetectedPin: '',
+				showOpenTableDialog: false,
+				showHostAccessDialog: false,
+				hostAccessInput: '',
+				hostAccessError: '',
+				hostVerified: false,
+				activeScreen: 'caller',
+				headerMenuSelection: '',
+				selectedTableDeal: '',
+				selectedTableDealIndex: 0,
+				boardControlState: 'needs_host',
+				playPage: 0,
+				patternResetToken: nextPatternResetToken,
+			},
+			() => {
+				this.publishSharedSession();
+			}
+		);
 	};
 
 	pauseGame = () => {
 		if (this.state.interval) {
 			clearInterval(this.state.interval);
 		}
-		this.setState({ newGame: false, running: false, interval: 0 });
+		this.setState({ newGame: false, running: false, interval: 0 }, () => {
+			this.publishSharedSession();
+		});
 	};
 
 	resumeGame = () => {
@@ -1299,7 +1441,9 @@ class LetsPlayBingo extends Component {
 			clearInterval(this.state.interval);
 		}
 		const nextInterval = setInterval(this.callNumber, this.state.delay);
-		this.setState({ newGame: false, running: true, interval: nextInterval });
+		this.setState({ newGame: false, running: true, interval: nextInterval }, () => {
+			this.publishSharedSession();
+		});
 	};
 
 	/*
@@ -1360,10 +1504,12 @@ class LetsPlayBingo extends Component {
 					: newBall.number,
 			]);
 			// update the state to re-render the board
-		const nextCallHistory = (Array.isArray(this.state.callHistory) ? this.state.callHistory : []).concat([
-			{ letter: newBall.letter, number: newBall.number },
-		]).slice(-75);
-		this.setState({ balls: balls, callHistory: nextCallHistory });
+			const nextCallHistory = (Array.isArray(this.state.callHistory) ? this.state.callHistory : []).concat([
+				{ letter: newBall.letter, number: newBall.number },
+			]).slice(-75);
+			this.setState({ balls: balls, callHistory: nextCallHistory }, () => {
+				this.publishSharedSession();
+			});
 		}
 	};
 
@@ -1472,7 +1618,7 @@ class LetsPlayBingo extends Component {
 		const selectedTableDealLine = hasSelectedTableDeal
 			? `${this.state.selectedTableDeal}`
 			: '';
-		const canJoinSession = Boolean(this.state.hostVerified && hasSelectedTableDeal);
+		const canJoinSession = Boolean(hasSelectedTableDeal);
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const getBallColor = (letter) => {
 			switch (letter) {

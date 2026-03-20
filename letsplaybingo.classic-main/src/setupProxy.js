@@ -2,6 +2,33 @@ const fs = require('fs');
 const path = require('path');
 
 module.exports = function setupProxy(app) {
+	app.get('/api/session', (req, res) => {
+		try {
+			const repoRoot = path.resolve(__dirname, '..', '..');
+			const filePath = path.join(repoRoot, 'SessionState.json');
+			return res.json(readExistingSession(filePath));
+		} catch (error) {
+			return res.status(500).json({ error: 'read_failed' });
+		}
+	});
+
+	app.post('/api/session', expressJsonFallback, (req, res) => {
+		try {
+			const repoRoot = path.resolve(__dirname, '..', '..');
+			const filePath = path.join(repoRoot, 'SessionState.json');
+			const payload = req.body && req.body.session ? req.body.session : req.body;
+			const normalizedSession = normalizeSharedSession(payload);
+			const nextState = {
+				updatedAt: new Date().toISOString(),
+				session: normalizedSession,
+			};
+			fs.writeFileSync(filePath, JSON.stringify(nextState, null, 2), 'utf8');
+			return res.json(nextState);
+		} catch (error) {
+			return res.status(500).json({ error: 'write_failed' });
+		}
+	});
+
 	app.get('/api/books/:familyId', (req, res) => {
 		try {
 			const familyId = String((req.params && req.params.familyId) || '').replace(/[^\d]/g, '').slice(0, 5);
@@ -112,6 +139,102 @@ function readExistingBooks(filePath) {
 	} catch (e) {
 		return { updatedAt: new Date().toISOString(), orders: {} };
 	}
+}
+
+function readExistingSession(filePath) {
+	if (!fs.existsSync(filePath)) {
+		return {
+			updatedAt: new Date().toISOString(),
+			session: getDefaultSharedSession(),
+		};
+	}
+	try {
+		const raw = fs.readFileSync(filePath, 'utf8');
+		const parsed = raw ? JSON.parse(raw) : {};
+		return {
+			updatedAt: parsed && parsed.updatedAt ? parsed.updatedAt : new Date().toISOString(),
+			session: normalizeSharedSession(parsed && parsed.session ? parsed.session : parsed),
+		};
+	} catch (e) {
+		return {
+			updatedAt: new Date().toISOString(),
+			session: getDefaultSharedSession(),
+		};
+	}
+}
+
+function getDefaultSharedSession() {
+	return {
+		balls: buildDefaultBalls(),
+		callHistory: [],
+		newGame: true,
+		running: false,
+		selectedTableDeal: '',
+		selectedTableDealIndex: 0,
+		boardControlState: 'needs_host',
+		bingoDetectedPin: '',
+		patternResetToken: 0,
+	};
+}
+
+function buildDefaultBalls() {
+	const balls = {};
+	for (let number = 1; number <= 75; number += 1) {
+		let letter = 'B';
+		if (number >= 16 && number <= 30) letter = 'I';
+		if (number >= 31 && number <= 45) letter = 'N';
+		if (number >= 46 && number <= 60) letter = 'G';
+		if (number >= 61) letter = 'O';
+		balls[number] = {
+			letter,
+			number,
+			called: false,
+			active: false,
+		};
+	}
+	return balls;
+}
+
+function normalizeSharedSession(session) {
+	const base = getDefaultSharedSession();
+	const incoming = session && typeof session === 'object' ? session : {};
+	const allowedBoardStates = ['needs_host', 'host_ready', 'table_ready', 'drawing', 'paused'];
+	const normalizedBoardState = allowedBoardStates.includes(incoming.boardControlState)
+		? incoming.boardControlState
+		: base.boardControlState;
+	const incomingHistory = Array.isArray(incoming.callHistory) ? incoming.callHistory : [];
+	return {
+		balls: normalizeBalls(incoming.balls),
+		callHistory: incomingHistory
+			.map((entry) => ({
+				letter: String((entry && entry.letter) || '').slice(0, 1),
+				number: parseInt(entry && entry.number, 10) || 0,
+			}))
+			.filter((entry) => entry.letter && entry.number > 0)
+			.slice(-75),
+		newGame: typeof incoming.newGame === 'boolean' ? incoming.newGame : base.newGame,
+		running: typeof incoming.running === 'boolean' ? incoming.running : base.running,
+		selectedTableDeal: String(incoming.selectedTableDeal || ''),
+		selectedTableDealIndex: parseInt(incoming.selectedTableDealIndex, 10) || 0,
+		boardControlState: normalizedBoardState,
+		bingoDetectedPin: String(incoming.bingoDetectedPin || ''),
+		patternResetToken: parseInt(incoming.patternResetToken, 10) || 0,
+	};
+}
+
+function normalizeBalls(sourceBalls) {
+	const baseBalls = buildDefaultBalls();
+	const incoming = sourceBalls && typeof sourceBalls === 'object' ? sourceBalls : {};
+	Object.keys(baseBalls).forEach((key) => {
+		const incomingBall = incoming[key] || {};
+		baseBalls[key] = {
+			letter: baseBalls[key].letter,
+			number: baseBalls[key].number,
+			called: !!incomingBall.called,
+			active: !!incomingBall.active,
+		};
+	});
+	return baseBalls;
 }
 
 function expressJsonFallback(req, res, next) {
