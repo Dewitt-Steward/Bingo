@@ -1667,7 +1667,6 @@ class LetsPlayBingo extends Component {
 			: '';
 		const canJoinSession = Boolean(hasSelectedTableDeal);
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
-		const hostSessionActive = boardControlState !== 'needs_host';
 		const getBallColor = (letter) => {
 			switch (letter) {
 				case 'B':
@@ -1804,7 +1803,7 @@ class LetsPlayBingo extends Component {
 										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
 									</>
 								) : null}
-								{hostSessionActive ? (
+								{this.state.hostVerified ? (
 									<button className="lpb-btn lpb-btn-radio" onClick={this.openRadio}>Radio</button>
 								) : null}
 							</div>
