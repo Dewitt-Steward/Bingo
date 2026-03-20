@@ -1106,13 +1106,18 @@ class LetsPlayBingo extends Component {
 			return;
 		}
 		document.body.classList.remove('backdrop-visible');
-		this.setState({
-			showHostAccessDialog: false,
-			hostVerified: true,
-			hostAccessCode: provided,
-			boardControlState: 'host_ready',
-			hostAccessError: '',
-		});
+		this.setState(
+			{
+				showHostAccessDialog: false,
+				hostVerified: true,
+				hostAccessCode: provided,
+				boardControlState: 'host_ready',
+				hostAccessError: '',
+			},
+			() => {
+				this.publishSharedSession();
+			}
+		);
 	};
 
 	openTableDialog = () => {
@@ -1662,6 +1667,7 @@ class LetsPlayBingo extends Component {
 			: '';
 		const canJoinSession = Boolean(hasSelectedTableDeal);
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
+		const hostSessionActive = boardControlState !== 'needs_host';
 		const getBallColor = (letter) => {
 			switch (letter) {
 				case 'B':
@@ -1771,7 +1777,7 @@ class LetsPlayBingo extends Component {
 					) : (
 						<div className="lpb-board-controls">
 							<div className="lpb-board-controls-buttons">
-								{!this.state.hostVerified || boardControlState === 'needs_host' ? (
+								{boardControlState === 'needs_host' ? (
 									<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host</button>
 								) : null}
 								{this.state.hostVerified && boardControlState === 'host_ready' ? (
@@ -1798,7 +1804,9 @@ class LetsPlayBingo extends Component {
 										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
 									</>
 								) : null}
-								<button className="lpb-btn lpb-btn-radio" onClick={this.openRadio}>Radio</button>
+								{hostSessionActive ? (
+									<button className="lpb-btn lpb-btn-radio" onClick={this.openRadio}>Radio</button>
+								) : null}
 							</div>
 							{showRadioNowPlaying ? (
 								<div className="lpb-radio-now-playing">
