@@ -2510,7 +2510,23 @@ input[type='range']::-webkit-slider-thumb {
 		text-align: center;
 	}
 	#ball {
-		margin-bottom: 2rem;
+		max-width: 100% !important;
+		margin-bottom: 0;
+	}
+
+	.lpb-board-current-ball-box {
+		align-items: center;
+		justify-content: center;
+		padding: 0.85rem;
+	}
+
+	.lpb-board-current-ball-box .lpb-ball-display,
+	.lpb-board-current-ball-box .lpb-ball-display-stage {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
 	}
 
 	.lpb-call-history-grid {
