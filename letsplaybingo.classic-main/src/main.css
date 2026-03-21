@@ -2480,25 +2480,30 @@ input[type='range']::-webkit-slider-thumb {
 	}
 
 	.board {
+		display: flex;
+		flex-direction: column;
 		text-align: center;
-		font-size: 1.25rem;
+		font-size: 0.98rem;
+		width: 100%;
+		aspect-ratio: 16 / 5;
 	}
 
 	.board-row {
-		display: inline-block;
+		display: flex;
+		width: 100%;
 	}
 
 	.letter {
-		background: #e53935;
-		color: white;
+		background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
+		color: #f03c32;
 	}
 
 	.letter,
 	.ball {
-		display: block;
-		width: 2em;
+		display: flex;
+		width: 6.25%;
 		height: auto;
-		line-height: 1.5em;
+		line-height: 1;
 	}
 
 	footer * {
