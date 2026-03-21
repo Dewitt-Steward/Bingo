@@ -2513,6 +2513,28 @@ input[type='range']::-webkit-slider-thumb {
 		max-width: 9.7rem;
 	}
 
+	.lpb-call-summary {
+		flex-direction: column;
+		align-items: center;
+		gap: 0.8rem;
+		padding: 0 0 1rem;
+	}
+
+	.lpb-call-summary-item {
+		width: 100%;
+		max-width: 9.5rem;
+	}
+
+	.lpb-call-summary-box {
+		max-width: none;
+	}
+
+	.lpb-call-summary-game-inline {
+		position: static;
+		padding: 0;
+		margin-top: 0.15rem;
+	}
+
 	.lpb-call-history-slot {
 		width: 2.85rem;
 	}
