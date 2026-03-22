@@ -980,22 +980,22 @@ class LetsPlayBingo extends Component {
 
 	handleDraw = () => {
 		this.confirmAction(
-			'Draw',
-			'Start the live draw and begin calling numbers for the active board. Confirm to continue.',
+			'Start Draw',
+			'Start the live draw and put the board in play. Confirm to continue.',
 			() => {
 				this.startGame();
 				this.setState({ boardControlState: 'drawing' }, () => {
 					this.publishSharedSession();
 				});
 			},
-			'Draw'
+			'Start Draw'
 		);
 	};
 
 	handleHoldDraw = () => {
 		this.confirmAction(
 			'Hold Draw',
-			'Pause number calling for the current round. Confirm to continue.',
+			'Place the draw on hold for the current round. Confirm to continue.',
 			() => {
 				this.pauseGame();
 				this.setState({ boardControlState: 'paused' }, () => {
@@ -1009,7 +1009,7 @@ class LetsPlayBingo extends Component {
 	handleResume = () => {
 		this.confirmAction(
 			'Resume Draw',
-			'Resume number calling for the current round. Confirm to continue.',
+			'Return the draw to play for the current round. Confirm to continue.',
 			() => {
 				this.resumeGame();
 				this.setState({ boardControlState: 'table_ready' }, () => {
@@ -1029,19 +1029,19 @@ class LetsPlayBingo extends Component {
 
 	handleReset = () => {
 		this.confirmAction(
-			'Reset',
-			'Reset the board, clear all called balls, and clear loaded session cards. Confirm to continue.',
+			'Clear Board',
+			'Clear the board, remove all called balls, and clear loaded session cards. Confirm to continue.',
 			this.resetBoard,
-			'Reset'
+			'Clear Board'
 		);
 	};
 
 	handleCloseTable = () => {
 		this.confirmAction(
-			'Close Table',
-			'Close the table, clear the active session, reset the board, and sign out the host. Confirm to continue.',
+			'Close Floor',
+			'Close the floor, clear the active session, reset the board, and sign out host access. Confirm to continue.',
 			this.closeTable,
-			'Close Table'
+			'Close Floor'
 		);
 	};
 
@@ -1777,30 +1777,30 @@ class LetsPlayBingo extends Component {
 						<div className="lpb-board-controls">
 							<div className="lpb-board-controls-buttons">
 								{!this.state.hostVerified && boardControlState === 'needs_host' ? (
-									<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host</button>
+									<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host Access</button>
 								) : null}
 								{this.state.hostVerified && boardControlState === 'host_ready' ? (
 									<>
-										<button className="lpb-btn lpb-btn-open-table" onClick={this.openTableDialog}>Open Table</button>
-										<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Table</button>
+										<button className="lpb-btn lpb-btn-open-table" onClick={this.openTableDialog}>Open Floor</button>
+										<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Floor</button>
 									</>
 								) : null}
 								{this.state.hostVerified && boardControlState === 'table_ready' ? (
 									<>
-										<button className="lpb-btn lpb-btn-open" onClick={this.handleDraw}>Draw</button>
-										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
+										<button className="lpb-btn lpb-btn-open" onClick={this.handleDraw}>Start Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
 									</>
 								) : null}
 								{this.state.hostVerified && boardControlState === 'drawing' ? (
 									<>
 										<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
-										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
 									</>
 								) : null}
 								{this.state.hostVerified && boardControlState === 'paused' ? (
 									<>
 										<button className="lpb-btn lpb-btn-resume" onClick={this.handleResume}>Resume Draw</button>
-										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Reset</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
 									</>
 								) : null}
 								{this.state.hostVerified ? (
@@ -1839,9 +1839,9 @@ class LetsPlayBingo extends Component {
 				<div id="backdrop" className={this.backdropClasses}></div>
 				<div id="disclaimer" className={this.alertClasses}>
 					<h4 className="no-margin">Bingo!</h4>
-					<p className="small-text">All of the bingo balls have been called!</p>
+					<p className="small-text">All bingo balls have been called.</p>
 					<p>
-						<button onClick={this.closeAlert}>Close</button>
+						<button onClick={this.closeAlert}>Close Alert</button>
 					</p>
 				</div>
 				<div id="confirmation" className={this.confirmClasses}>
@@ -1853,8 +1853,8 @@ class LetsPlayBingo extends Component {
 					</p>
 				</div>
 				<div id="open-table-dialog" className={this.state.showOpenTableDialog ? 'show' : 'hide'}>
-					<h4 className="no-margin">Open Table</h4>
-					<p className="small-text">Select the game to open.</p>
+					<h4 className="no-margin">Open Floor</h4>
+					<p className="small-text">Select the game to bring to the floor.</p>
 					<div className="lpb-open-table-field">
 						<label htmlFor="lpb-open-table-deal">Game</label>
 						<select
@@ -1876,7 +1876,7 @@ class LetsPlayBingo extends Component {
 				</div>
 				<div id="host-access-dialog" className={this.state.showHostAccessDialog ? 'show' : 'hide'}>
 					<h4 className="no-margin">Host Access</h4>
-					<p className="small-text">Enter today&apos;s 8 digit date (CT) to unlock host controls.</p>
+					<p className="small-text">Enter 8-digit access code.</p>
 					<div className="lpb-open-table-field">
 						<label htmlFor="lpb-host-access-input">Access Code</label>
 						<input
