@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/Bingo/static/css/main.0a24332e.css",
-    "main.js": "/Bingo/static/js/main.bf5026df.js",
+    "main.js": "/Bingo/static/js/main.68134989.js",
     "static/media/logo-light.svg": "/Bingo/static/media/logo-light.38093bd6ff95ec1fd894b5c92d7b2ca5.svg",
     "static/media/logo.svg": "/Bingo/static/media/logo.49b09049bf8d9cedbf314d2b1a0dfcd3.svg",
     "index.html": "/Bingo/index.html",
     "main.0a24332e.css.map": "/Bingo/static/css/main.0a24332e.css.map",
-    "main.bf5026df.js.map": "/Bingo/static/js/main.bf5026df.js.map"
+    "main.68134989.js.map": "/Bingo/static/js/main.68134989.js.map"
   },
   "entrypoints": [
     "static/css/main.0a24332e.css",
-    "static/js/main.bf5026df.js"
+    "static/js/main.68134989.js"
   ]
 }

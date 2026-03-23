@@ -271,6 +271,57 @@ function normalizeAssignedCard(card) {
 	return hasValidColumns ? normalized : null;
 }
 
+function makeTierBinBcinKey(tier, bin, bcin) {
+	return `${String(tier || '').toUpperCase()}|${String(bin || '').toUpperCase()}|${String(bcin || '')}`;
+}
+
+function makeBinBcinKey(bin, bcin) {
+	return `${String(bin || '').toUpperCase()}|${String(bcin || '')}`;
+}
+
+function buildBingoCardLookup(cardsCatalog) {
+	const byTierBinBcin = new Map();
+	const byBinBcin = new Map();
+	(Array.isArray(cardsCatalog) ? cardsCatalog : [])
+		.map((card) => normalizeAssignedCard(card))
+		.filter(Boolean)
+		.forEach((card) => {
+			const tier = String(card.Tier || '').trim();
+			const bin = String(card.BIN || '').trim();
+			const bcin = String(card.BCIN || '').trim();
+			if (!bin || !bcin) return;
+			if (tier) {
+				byTierBinBcin.set(makeTierBinBcinKey(tier, bin, bcin), card);
+			}
+			const fallbackKey = makeBinBcinKey(bin, bcin);
+			if (!byBinBcin.has(fallbackKey)) {
+				byBinBcin.set(fallbackKey, card);
+			}
+		});
+	return { byTierBinBcin, byBinBcin };
+}
+
+function resolveCardsFromAssignments(cardsAssigned, cardsCatalog) {
+	if (!Array.isArray(cardsAssigned) || cardsAssigned.length === 0) {
+		return [];
+	}
+	const lookup = buildBingoCardLookup(cardsCatalog);
+	return cardsAssigned
+		.map((assignment) => {
+			if (!assignment || typeof assignment !== 'object') return null;
+			const tier = String(assignment.Tier || assignment.tier || '').trim();
+			const bin = String(assignment.BIN || assignment.bin || '').trim();
+			const bcin = String(assignment.BCIN || assignment.bcin || '').trim();
+			if (!bin || !bcin) return null;
+			if (tier) {
+				const direct = lookup.byTierBinBcin.get(makeTierBinBcinKey(tier, bin, bcin));
+				if (direct) return direct;
+			}
+			return lookup.byBinBcin.get(makeBinBcinKey(bin, bcin)) || null;
+		})
+		.filter(Boolean);
+}
+
 function normalizeOrderForGame(order, selectedGameIndex) {
 	if (!order || typeof order !== 'object') return null;
 	const gameNumber = parseInt(selectedGameIndex, 10) || 0;
@@ -1632,6 +1683,7 @@ class LetsPlayBingo extends Component {
 		});
 		try {
 			let orderData = null;
+			let staticBingoCardsCatalog = [];
 			try {
 				const endpoint = selectedGameIndex > 0
 					? `/api/books/${familyId}?game=${selectedGameIndex}`
@@ -1658,9 +1710,25 @@ class LetsPlayBingo extends Component {
 						? staticData.orders[familyId]
 						: null;
 				orderData = normalizeOrderForGame(staticOrder, selectedGameIndex) || staticOrder;
+				try {
+					const staticCardsUrl = `${publicUrl}/Bingo%20Cards.json`;
+					const cardsResponse = await fetch(staticCardsUrl);
+					if (cardsResponse.ok) {
+						const cardsData = await cardsResponse.json();
+						staticBingoCardsCatalog = Array.isArray(cardsData && cardsData.cards) ? cardsData.cards : [];
+					}
+				} catch (cardsError) {}
 			}
 			if (!orderData || typeof orderData.totalCards !== 'number') {
 				throw new Error('not_found');
+			}
+			const resolvedDeck = resolveCardsFromAssignments(orderData.cardsAssigned, staticBingoCardsCatalog);
+			if (resolvedDeck.length > 0) {
+				orderData = {
+					...orderData,
+					playCardDeck: resolvedDeck,
+					totalCards: parseInt(orderData.totalCards, 10) || resolvedDeck.length,
+				};
 			}
 			const generatedDeck = buildPlayCardDeck(orderData);
 			this.setState({
