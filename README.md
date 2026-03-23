@@ -35,9 +35,6 @@ This guide covers the full board experience from opening the game through playin
 10. At session end, host clicks **Close Floor**.  
     This closes the active session, clears board state, and resets host control state.
 
-11. Optional host audio control: **Radio**.  
-    The host can toggle **Radio** on/off at any time during host-controlled gameplay.
-
 ## Player Notes
 
 - Cards display their `BIN` and `BCIN`.

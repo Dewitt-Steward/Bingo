@@ -63,9 +63,6 @@ const openTableDeals = [
 	'Jackpot Chase',
 	'Royal Finish',
 ];
-const radioStreamUrl = 'https://ice41.securenetsystems.net/KOWNLP';
-const radioMetadataUrl = 'https://r.jina.ai/http://https://957fmtheboss.com/?qtproxycall=aHR0cHM6Ly9pY2U0MS5zZWN1cmVuZXRzeXN0ZW1zLm5ldC9LT1dOTFA=&icymetadata=1';
-const radioLogoUrl = 'https://957fmtheboss.com/wp-content/uploads/2020/06/boss_blk.png';
 const localhostJoinBase = 'http://127.0.0.1:3000/Bingo';
 const productionJoinBase = 'https://dewitt-steward.github.io/Bingo';
 
@@ -614,13 +611,6 @@ class LetsPlayBingo extends Component {
 	 */
 	constructor(props) {
 		super(props);
-		this.radioAudio = null;
-		this.radioMetadataTimer = null;
-		this.radioAudioContext = null;
-		this.radioAnalyser = null;
-		this.radioSourceNode = null;
-		this.radioAnimationFrame = null;
-		this.radioFrequencyData = null;
 		this.sharedSessionPoller = null;
 		this.sharedSessionUpdatedAt = '';
 		this.isApplyingSharedSession = false;
@@ -637,9 +627,6 @@ class LetsPlayBingo extends Component {
 			confirmTitle: '',
 			confirmMessage: '',
 			confirmButtonText: 'Confirm',
-			radioPlaying: false,
-			radioNowPlaying: '',
-			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
 			balls: {
 				1: { letter: 'B', number: 1, called: false, active: false },
 				2: { letter: 'B', number: 2, called: false, active: false },
@@ -832,23 +819,6 @@ class LetsPlayBingo extends Component {
 		if (this.state.interval) {
 			clearInterval(this.state.interval);
 		}
-		this.stopRadioVisualizer();
-		if (this.radioMetadataTimer) {
-			clearInterval(this.radioMetadataTimer);
-			this.radioMetadataTimer = null;
-		}
-		if (this.radioAudio) {
-			try {
-				this.radioAudio.removeEventListener('pause', this.handleRadioAudioPause);
-				this.radioAudio.removeEventListener('ended', this.handleRadioAudioEnded);
-				this.radioAudio.removeEventListener('error', this.handleRadioAudioError);
-				this.radioAudio.removeEventListener('abort', this.handleRadioAudioError);
-				this.radioAudio.removeEventListener('emptied', this.handleRadioAudioError);
-				this.radioAudio.pause();
-				this.radioAudio.src = '';
-			} catch (e) {}
-			this.radioAudio = null;
-		}
 		return undefined;
 	}
 
@@ -879,7 +849,6 @@ class LetsPlayBingo extends Component {
 			boardControlState: String(sourceState.boardControlState || 'needs_host'),
 			bingoDetectedPin: String(sourceState.bingoDetectedPin || ''),
 			patternResetToken: parseInt(sourceState.patternResetToken, 10) || 0,
-			radioPlaying: !!sourceState.radioPlaying,
 		};
 	};
 
@@ -899,9 +868,6 @@ class LetsPlayBingo extends Component {
 				active: !!ball.active,
 			};
 		});
-		const nextRadioPlaying = typeof session.radioPlaying === 'boolean'
-			? session.radioPlaying
-			: false;
 		this.isApplyingSharedSession = true;
 		this.setState(
 			{
@@ -917,7 +883,6 @@ class LetsPlayBingo extends Component {
 			},
 			() => {
 				this.isApplyingSharedSession = false;
-				this.syncRadioPlaybackToSession(nextRadioPlaying);
 			}
 		);
 	};
@@ -982,239 +947,6 @@ class LetsPlayBingo extends Component {
 				this.sharedSessionUpdatedAt = String(result.updatedAt);
 			}
 		} catch (e) {}
-	};
-
-	stopRadioVisualizer = () => {
-		if (this.radioAnimationFrame) {
-			cancelAnimationFrame(this.radioAnimationFrame);
-			this.radioAnimationFrame = null;
-		}
-		if (this.radioAnalyser) {
-			try {
-				this.radioAnalyser.disconnect();
-			} catch (e) {}
-			this.radioAnalyser = null;
-		}
-		if (this.radioSourceNode) {
-			try {
-				this.radioSourceNode.disconnect();
-			} catch (e) {}
-			this.radioSourceNode = null;
-		}
-		if (this.radioAudioContext) {
-			try {
-				this.radioAudioContext.close();
-			} catch (e) {}
-			this.radioAudioContext = null;
-		}
-		this.radioFrequencyData = null;
-		this.setState({
-			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
-		});
-	};
-
-	updateRadioVisualizerFrame = () => {
-		if (!this.radioAnalyser || !this.radioFrequencyData || !this.state.radioPlaying) {
-			return;
-		}
-		this.radioAnalyser.getByteFrequencyData(this.radioFrequencyData);
-		const bucketCount = 16;
-		const valuesPerBucket = Math.max(1, Math.floor(this.radioFrequencyData.length / bucketCount));
-		const nextLevels = Array.from({ length: bucketCount }, (_, bucketIndex) => {
-			const start = bucketIndex * valuesPerBucket;
-			const end = Math.min(this.radioFrequencyData.length, start + valuesPerBucket);
-			let total = 0;
-			let count = 0;
-			for (let i = start; i < end; i += 1) {
-				total += this.radioFrequencyData[i];
-				count += 1;
-			}
-			const average = count ? total / count : 0;
-			return Math.max(0.16, Math.min(1, average / 255));
-		});
-		this.setState({ radioVisualizerLevels: nextLevels });
-		this.radioAnimationFrame = requestAnimationFrame(this.updateRadioVisualizerFrame);
-	};
-
-	startRadioVisualizer = async () => {
-		if (!this.radioAudio) {
-			return;
-		}
-		const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-		if (!AudioContextClass) {
-			return;
-		}
-		if (!this.radioAudioContext) {
-			this.radioAudioContext = new AudioContextClass();
-		}
-		if (this.radioAudioContext.state === 'suspended') {
-			try {
-				await this.radioAudioContext.resume();
-			} catch (e) {}
-		}
-		if (!this.radioSourceNode) {
-			this.radioSourceNode = this.radioAudioContext.createMediaElementSource(this.radioAudio);
-		}
-		if (!this.radioAnalyser) {
-			this.radioAnalyser = this.radioAudioContext.createAnalyser();
-			this.radioAnalyser.fftSize = 64;
-			this.radioAnalyser.smoothingTimeConstant = 0.82;
-			this.radioFrequencyData = new Uint8Array(this.radioAnalyser.frequencyBinCount);
-			this.radioSourceNode.connect(this.radioAnalyser);
-			this.radioAnalyser.connect(this.radioAudioContext.destination);
-		}
-		if (this.radioAnimationFrame) {
-			cancelAnimationFrame(this.radioAnimationFrame);
-		}
-		this.radioAnimationFrame = requestAnimationFrame(this.updateRadioVisualizerFrame);
-	};
-
-	stopRadioPlayback = () => {
-		this.stopRadioVisualizer();
-		if (this.radioMetadataTimer) {
-			clearInterval(this.radioMetadataTimer);
-			this.radioMetadataTimer = null;
-		}
-		if (this.radioAudio) {
-			try {
-				this.radioAudio.pause();
-			} catch (e) {}
-		}
-		this.setState({
-			radioPlaying: false,
-			radioNowPlaying: '',
-			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
-		});
-	};
-
-	ensureRadioAudio = () => {
-		if (this.radioAudio) {
-			return;
-		}
-		const audio = new Audio(radioStreamUrl);
-		audio.preload = 'none';
-		audio.crossOrigin = 'anonymous';
-		audio.addEventListener('pause', this.handleRadioAudioPause);
-		audio.addEventListener('ended', this.handleRadioAudioEnded);
-		audio.addEventListener('error', this.handleRadioAudioError);
-		audio.addEventListener('abort', this.handleRadioAudioError);
-		audio.addEventListener('emptied', this.handleRadioAudioError);
-		this.radioAudio = audio;
-	};
-
-	startRadioPlayback = async ({ syncFromSession = false } = {}) => {
-		this.ensureRadioAudio();
-		try {
-			await this.radioAudio.play();
-			this.setState({ radioPlaying: true }, () => {
-				if (!syncFromSession) {
-					this.publishSharedSession({
-						...this.state,
-						radioPlaying: true,
-					});
-				}
-			});
-			await this.startRadioVisualizer();
-			this.startRadioMetadataPolling();
-			return true;
-		} catch (e) {
-			if (!syncFromSession) {
-				window.open(radioStreamUrl, '_blank', 'noopener,noreferrer');
-			}
-			this.setState({
-				radioPlaying: false,
-			});
-			return false;
-		}
-	};
-
-	syncRadioPlaybackToSession = (shouldPlay) => {
-		const wantsPlayback = !!shouldPlay;
-		const hasLivePlayback = !!(
-			this.state.radioPlaying &&
-			this.radioAudio &&
-			!this.radioAudio.paused &&
-			!this.radioAudio.ended
-		);
-		if (wantsPlayback) {
-			if (hasLivePlayback) return;
-			this.startRadioPlayback({ syncFromSession: true });
-			return;
-		}
-		if (this.state.radioPlaying || (this.radioAudio && !this.radioAudio.paused)) {
-			this.stopRadioPlayback();
-		}
-	};
-
-	handleRadioAudioPause = () => {
-		if (!this.radioAudio || this.radioAudio.ended) {
-			return;
-		}
-		this.stopRadioPlayback();
-	};
-
-	handleRadioAudioEnded = () => {
-		this.stopRadioPlayback();
-	};
-
-	handleRadioAudioError = () => {
-		this.stopRadioPlayback();
-	};
-
-	parseRadioMetadata = (rawText) => {
-		const text = String(rawText || '').trim();
-		if (!text) return '';
-		const markdownMarker = 'Markdown Content:';
-		const body = text.includes(markdownMarker)
-			? text.split(markdownMarker).pop()
-			: text;
-		const lines = body
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean)
-			.filter((line) => !/^Title:\s*/i.test(line))
-			.filter((line) => !/^URL Source:\s*/i.test(line))
-			.filter((line) => !/^Published Time:\s*/i.test(line));
-		return lines.length ? lines[lines.length - 1] : '';
-	};
-
-	parseRadioNowPlayingParts = (nowPlaying) => {
-		const text = String(nowPlaying || '').trim();
-		if (!text) {
-			return { artist: '', track: '' };
-		}
-		const separators = [' - ', ' – ', ' — ', '-'];
-		for (let i = 0; i < separators.length; i += 1) {
-			const separator = separators[i];
-			const parts = text.split(separator).map((part) => part.trim()).filter(Boolean);
-			if (parts.length >= 2) {
-				return {
-					artist: parts[0],
-					track: parts.slice(1).join(' - '),
-				};
-			}
-		}
-		return { artist: '', track: text };
-	};
-
-	fetchRadioMetadata = async () => {
-		try {
-			const response = await fetch(radioMetadataUrl, { method: 'GET' });
-			if (!response.ok) return;
-			const rawText = await response.text();
-			const nowPlaying = this.parseRadioMetadata(rawText);
-			if (nowPlaying) {
-				this.setState({ radioNowPlaying: nowPlaying });
-			}
-		} catch (e) {}
-	};
-
-	startRadioMetadataPolling = () => {
-		if (this.radioMetadataTimer) {
-			clearInterval(this.radioMetadataTimer);
-		}
-		this.fetchRadioMetadata();
-		this.radioMetadataTimer = setInterval(this.fetchRadioMetadata, 15000);
 	};
 
 	getCalledNumbersSet = (ballsState) => {
@@ -1429,18 +1161,6 @@ class LetsPlayBingo extends Component {
 			this.closeTable,
 			'Close Floor'
 		);
-	};
-
-	openRadio = async () => {
-		if (this.state.radioPlaying) {
-			this.stopRadioPlayback();
-			this.publishSharedSession({
-				...this.state,
-				radioPlaying: false,
-			});
-			return;
-		}
-		await this.startRadioPlayback({ syncFromSession: false });
 	};
 
 	openHostAccessDialog = () => {
@@ -2157,16 +1877,6 @@ class LetsPlayBingo extends Component {
 		const markFreeSpace = this.isGameInSession();
 		const hasBingoCard = playCardDeck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern, markFreeSpace));
 		const bingoDetectedPin = this.state.bingoDetectedPin || '';
-		const radioNowPlayingParts = this.parseRadioNowPlayingParts(this.state.radioNowPlaying);
-		const radioVisualizerLevels = Array.isArray(this.state.radioVisualizerLevels)
-			? this.state.radioVisualizerLevels
-			: [];
-		const showRadioNowPlaying = !!(
-			this.state.radioPlaying &&
-			this.radioAudio &&
-			!this.radioAudio.paused &&
-			!this.radioAudio.ended
-		);
 		const hasSelectedTableDeal = Boolean(this.state.selectedTableDeal);
 		const selectedTableDealLine = hasSelectedTableDeal
 			? `${this.state.selectedTableDeal}`
@@ -2312,32 +2022,7 @@ class LetsPlayBingo extends Component {
 										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
 									</>
 								) : null}
-								{this.state.hostVerified ? (
-									<button className="lpb-btn lpb-btn-radio" onClick={this.openRadio}>Radio</button>
-								) : null}
 							</div>
-							{showRadioNowPlaying ? (
-								<div className="lpb-radio-now-playing">
-									<img className="lpb-radio-now-playing-logo" src={radioLogoUrl} alt="95.7 The Boss" />
-									<div className="lpb-radio-now-playing-copy">
-										<div className="lpb-radio-visualizer" aria-hidden="true">
-											{radioVisualizerLevels.map((level, index) => (
-												<span
-													key={`radio-bar-${index}`}
-													className="lpb-radio-visualizer-bar"
-													style={{ transform: `scaleY(${level})` }}
-												></span>
-											))}
-										</div>
-										{radioNowPlayingParts.track ? (
-											<div className="lpb-radio-now-playing-track">{radioNowPlayingParts.track}</div>
-										) : null}
-										{radioNowPlayingParts.artist ? (
-											<div className="lpb-radio-now-playing-artist">{radioNowPlayingParts.artist}</div>
-										) : null}
-									</div>
-								</div>
-							) : null}
 						</div>
 					)}
 				</div>
