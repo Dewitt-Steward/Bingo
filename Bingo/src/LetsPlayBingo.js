@@ -879,6 +879,7 @@ class LetsPlayBingo extends Component {
 			boardControlState: String(sourceState.boardControlState || 'needs_host'),
 			bingoDetectedPin: String(sourceState.bingoDetectedPin || ''),
 			patternResetToken: parseInt(sourceState.patternResetToken, 10) || 0,
+			radioPlaying: !!sourceState.radioPlaying,
 		};
 	};
 
@@ -898,6 +899,9 @@ class LetsPlayBingo extends Component {
 				active: !!ball.active,
 			};
 		});
+		const nextRadioPlaying = typeof session.radioPlaying === 'boolean'
+			? session.radioPlaying
+			: false;
 		this.isApplyingSharedSession = true;
 		this.setState(
 			{
@@ -913,6 +917,7 @@ class LetsPlayBingo extends Component {
 			},
 			() => {
 				this.isApplyingSharedSession = false;
+				this.syncRadioPlaybackToSession(nextRadioPlaying);
 			}
 		);
 	};
@@ -1080,6 +1085,65 @@ class LetsPlayBingo extends Component {
 			radioNowPlaying: '',
 			radioVisualizerLevels: Array.from({ length: 16 }, () => 0.18),
 		});
+	};
+
+	ensureRadioAudio = () => {
+		if (this.radioAudio) {
+			return;
+		}
+		const audio = new Audio(radioStreamUrl);
+		audio.preload = 'none';
+		audio.crossOrigin = 'anonymous';
+		audio.addEventListener('pause', this.handleRadioAudioPause);
+		audio.addEventListener('ended', this.handleRadioAudioEnded);
+		audio.addEventListener('error', this.handleRadioAudioError);
+		audio.addEventListener('abort', this.handleRadioAudioError);
+		audio.addEventListener('emptied', this.handleRadioAudioError);
+		this.radioAudio = audio;
+	};
+
+	startRadioPlayback = async ({ syncFromSession = false } = {}) => {
+		this.ensureRadioAudio();
+		try {
+			await this.radioAudio.play();
+			this.setState({ radioPlaying: true }, () => {
+				if (!syncFromSession) {
+					this.publishSharedSession({
+						...this.state,
+						radioPlaying: true,
+					});
+				}
+			});
+			await this.startRadioVisualizer();
+			this.startRadioMetadataPolling();
+			return true;
+		} catch (e) {
+			if (!syncFromSession) {
+				window.open(radioStreamUrl, '_blank', 'noopener,noreferrer');
+			}
+			this.setState({
+				radioPlaying: false,
+			});
+			return false;
+		}
+	};
+
+	syncRadioPlaybackToSession = (shouldPlay) => {
+		const wantsPlayback = !!shouldPlay;
+		const hasLivePlayback = !!(
+			this.state.radioPlaying &&
+			this.radioAudio &&
+			!this.radioAudio.paused &&
+			!this.radioAudio.ended
+		);
+		if (wantsPlayback) {
+			if (hasLivePlayback) return;
+			this.startRadioPlayback({ syncFromSession: true });
+			return;
+		}
+		if (this.state.radioPlaying || (this.radioAudio && !this.radioAudio.paused)) {
+			this.stopRadioPlayback();
+		}
 	};
 
 	handleRadioAudioPause = () => {
@@ -1370,27 +1434,13 @@ class LetsPlayBingo extends Component {
 	openRadio = async () => {
 		if (this.state.radioPlaying) {
 			this.stopRadioPlayback();
+			this.publishSharedSession({
+				...this.state,
+				radioPlaying: false,
+			});
 			return;
 		}
-		if (!this.radioAudio) {
-			const audio = new Audio(radioStreamUrl);
-			audio.preload = 'none';
-			audio.crossOrigin = 'anonymous';
-			audio.addEventListener('pause', this.handleRadioAudioPause);
-			audio.addEventListener('ended', this.handleRadioAudioEnded);
-			audio.addEventListener('error', this.handleRadioAudioError);
-			audio.addEventListener('abort', this.handleRadioAudioError);
-			audio.addEventListener('emptied', this.handleRadioAudioError);
-			this.radioAudio = audio;
-		}
-		try {
-			await this.radioAudio.play();
-			this.setState({ radioPlaying: true });
-			await this.startRadioVisualizer();
-			this.startRadioMetadataPolling();
-		} catch (e) {
-			window.open(radioStreamUrl, '_blank', 'noopener,noreferrer');
-		}
+		await this.startRadioPlayback({ syncFromSession: false });
 	};
 
 	openHostAccessDialog = () => {

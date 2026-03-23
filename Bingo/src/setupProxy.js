@@ -255,6 +255,7 @@ function getDefaultSharedSession() {
 		boardControlState: 'needs_host',
 		bingoDetectedPin: '',
 		patternResetToken: 0,
+		radioPlaying: false,
 	};
 }
 
@@ -300,6 +301,7 @@ function normalizeSharedSession(session) {
 		boardControlState: normalizedBoardState,
 		bingoDetectedPin: String(incoming.bingoDetectedPin || ''),
 		patternResetToken: parseInt(incoming.patternResetToken, 10) || 0,
+		radioPlaying: typeof incoming.radioPlaying === 'boolean' ? incoming.radioPlaying : base.radioPlaying,
 	};
 }
 
