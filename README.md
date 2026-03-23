@@ -50,10 +50,10 @@ Let's Play Bingo is a web-based Bingo game that allows a host to run a Bingo ses
 
 1. **Clone or Download the Repository**
    ```bash
-   git clone https://github.com/yourusername/letsplaybingo.classic-main.git
+   git clone https://github.com/yourusername/Bingo.git
    ```
 2. **Move Files to Web Server**
-   Place all files (including `letsplaybingo.classic-main` and `bingo.php`) in your web server's document root.
+   Place all files (including `Bingo/` and `html/`) in your web server's document root.
 3. **Set Permissions**
    Ensure PHP can read/write to any directories used for saving data (if applicable).
 
@@ -62,17 +62,22 @@ Let's Play Bingo is a web-based Bingo game that allows a host to run a Bingo ses
 ## 5. File Structure
 
 ```
-letsplaybingo.classic-main/
-├── assets/                # Images, CSS, JS
-├── config/                # Configuration files
-├── includes/              # PHP includes and helpers
-├── templates/             # HTML templates
-├── classes/               # PHP classes (game logic, user, etc.)
-├── data/                  # (Optional) Persistent data storage
-├── tests/                 # Unit and integration tests
-├── README.md
-├── bingo.php              # Main entry point
-└── ...existing code...
+project-root/
+├── .gitignore
+├── artwork/
+├── css/
+├── html/
+├── icons/
+├── images/
+│   ├── jpeg/
+│   ├── png/
+│   └── svg/
+├── js/
+├── data/
+├── maps/
+├── docs/
+├── text/
+└── xml/
 ```
 
 ---

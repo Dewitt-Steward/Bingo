@@ -1769,7 +1769,7 @@ class LetsPlayBingo extends Component {
 		const endpoint = getOrderSaveEndpoint();
 		if (!endpoint) {
 			this.setState({
-				orderSaveMessage: 'Generate is only available on localhost dev server and writes to Bingo/Books.json.',
+				orderSaveMessage: 'Generate is only available on localhost dev server and writes to data/Books.json.',
 			});
 			return;
 		}
@@ -1814,7 +1814,7 @@ class LetsPlayBingo extends Component {
 				});
 			} catch (e) {
 				this.setState({
-					orderSaveMessage: 'Save failed. Books.json in the Bingo folder was not updated.',
+					orderSaveMessage: 'Save failed. Books.json in the data folder was not updated.',
 				});
 			}
 		};

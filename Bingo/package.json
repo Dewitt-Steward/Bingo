@@ -12,7 +12,7 @@
     "underscore": "^1.10.2"
   },
   "scripts": {
-    "prebuild": "cp ../Books.json public/Books.json && cp ../Bingo\\ Cards.json public/Bingo\\ Cards.json",
+    "prebuild": "cp ../data/Books.json public/Books.json && cp ../data/Bingo\\ Cards.json public/Bingo\\ Cards.json",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",

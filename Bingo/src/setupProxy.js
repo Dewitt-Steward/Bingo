@@ -5,7 +5,7 @@ module.exports = function setupProxy(app) {
 	app.get('/api/session', (req, res) => {
 		try {
 			const repoRoot = path.resolve(__dirname, '..', '..');
-			const filePath = path.join(repoRoot, 'SessionState.json');
+			const filePath = path.join(repoRoot, 'data', 'SessionState.json');
 			return res.json(readExistingSession(filePath));
 		} catch (error) {
 			return res.status(500).json({ error: 'read_failed' });
@@ -15,7 +15,7 @@ module.exports = function setupProxy(app) {
 	app.post('/api/session', expressJsonFallback, (req, res) => {
 		try {
 			const repoRoot = path.resolve(__dirname, '..', '..');
-			const filePath = path.join(repoRoot, 'SessionState.json');
+			const filePath = path.join(repoRoot, 'data', 'SessionState.json');
 			const payload = req.body && req.body.session ? req.body.session : req.body;
 			const normalizedSession = normalizeSharedSession(payload);
 			const nextState = {
@@ -32,7 +32,7 @@ module.exports = function setupProxy(app) {
 	app.get('/api/books', (req, res) => {
 		try {
 			const repoRoot = path.resolve(__dirname, '..', '..');
-			const filePath = path.join(repoRoot, 'Books.json');
+			const filePath = path.join(repoRoot, 'data', 'Books.json');
 			const existingData = readExistingBooks(filePath);
 			const players = Object.entries(existingData.orders || {})
 				.map(([familyId, rawOrder]) => {
@@ -65,7 +65,7 @@ module.exports = function setupProxy(app) {
 				return res.status(400).json({ error: 'invalid_family_id' });
 			}
 			const repoRoot = path.resolve(__dirname, '..', '..');
-			const filePath = path.join(repoRoot, 'Books.json');
+			const filePath = path.join(repoRoot, 'data', 'Books.json');
 			const existingData = readExistingBooks(filePath);
 			const rawOrder = existingData.orders && existingData.orders[familyId] ? existingData.orders[familyId] : null;
 			const order = normalizeOrderRecord(rawOrder);
@@ -73,7 +73,7 @@ module.exports = function setupProxy(app) {
 				return res.status(404).json({ error: 'not_found' });
 			}
 			let sessionOrder = { ...order };
-			const bingoCardsPath = path.join(repoRoot, 'Bingo Cards.json');
+			const bingoCardsPath = path.join(repoRoot, 'data', 'Bingo Cards.json');
 			const bingoCards = readBingoCardsDeck(bingoCardsPath);
 			if (!Number.isNaN(gameNumber) && gameNumber > 0) {
 				const gameEntry = Array.isArray(order.games)
@@ -138,8 +138,8 @@ module.exports = function setupProxy(app) {
 			}
 			const repoRoot = path.resolve(__dirname, '..', '..');
 			const fileName = 'Books.json';
-			const filePath = path.join(repoRoot, fileName);
-			const bingoCardsPath = path.join(repoRoot, 'Bingo Cards.json');
+			const filePath = path.join(repoRoot, 'data', fileName);
+			const bingoCardsPath = path.join(repoRoot, 'data', 'Bingo Cards.json');
 			const bingoCards = readBingoCardsDeck(bingoCardsPath);
 			if (!Array.isArray(bingoCards) || bingoCards.length === 0) {
 				return res.status(500).json({ error: 'bingo_cards_missing' });
@@ -171,7 +171,7 @@ module.exports = function setupProxy(app) {
 			return res.json({
 				ok: true,
 				fileName,
-				path: repoRoot,
+				path: path.dirname(filePath),
 			});
 		} catch (error) {
 			return res.status(500).json({ error: 'write_failed' });
