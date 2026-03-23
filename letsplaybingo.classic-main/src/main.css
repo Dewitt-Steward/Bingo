@@ -241,7 +241,8 @@ header .row {
 	margin: 0.75rem 0 0;
 }
 
-#host-access-dialog {
+#host-access-dialog,
+#host-signout-dialog {
 	position: fixed;
 	top: 22%;
 	width: 60%;
@@ -253,7 +254,8 @@ header .row {
 	color: #111827;
 }
 
-#host-access-dialog p {
+#host-access-dialog p,
+#host-signout-dialog p {
 	margin: 0.75rem 0 0;
 }
 
@@ -1541,6 +1543,103 @@ input[type='range']::-webkit-slider-thumb {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 1rem;
+}
+
+.lpb-players-shell {
+	width: min(92rem, calc(100% - 2rem));
+}
+
+.lpb-players-panel {
+	width: 100%;
+}
+
+.lpb-players-status,
+.lpb-players-error {
+	padding: 1rem;
+	border-radius: 0.8rem;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+		linear-gradient(180deg, rgba(19, 21, 24, 0.95), rgba(15, 17, 20, 0.95));
+	box-shadow: inset 0 0 0 0.08rem rgba(255, 255, 255, 0.08);
+	color: rgba(244, 239, 230, 0.88);
+	font-size: 0.92rem;
+	font-weight: 700;
+}
+
+.lpb-players-error {
+	color: #fca5a5;
+}
+
+.lpb-players-table-wrap {
+	width: 100%;
+	overflow-x: auto;
+	border-radius: 1rem;
+	box-shadow: inset 0 0 0 0.08rem rgba(255, 255, 255, 0.08);
+}
+
+.lpb-players-table {
+	width: 100%;
+	min-width: 54rem;
+	border-collapse: collapse;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+		linear-gradient(180deg, rgba(19, 21, 24, 0.95), rgba(15, 17, 20, 0.95));
+}
+
+.lpb-players-table th,
+.lpb-players-table td {
+	padding: 0.75rem 0.8rem;
+	border-bottom: 0.08rem solid rgba(255, 255, 255, 0.08);
+	text-align: left;
+	vertical-align: top;
+}
+
+.lpb-players-table th {
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: rgba(244, 239, 230, 0.72);
+	white-space: nowrap;
+}
+
+.lpb-players-table td {
+	font-size: 0.86rem;
+	font-weight: 700;
+	color: rgba(255, 255, 255, 0.9);
+}
+
+.lpb-players-link-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.42rem 0.7rem;
+	border-radius: 0.55rem;
+	border: 0.08rem solid rgba(255, 255, 255, 0.12);
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015)),
+		linear-gradient(180deg, #272b32 0%, #12151a 100%);
+	color: #f6f0e4;
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	text-decoration: none;
+	box-shadow:
+		inset 0 0.08rem 0 rgba(255, 255, 255, 0.08),
+		0 0.4rem 0.9rem rgba(0, 0, 0, 0.22);
+	transition:
+		transform 120ms ease,
+		box-shadow 120ms ease,
+		border-color 120ms ease;
+}
+
+.lpb-players-link-btn:hover {
+	transform: translateY(-0.04rem);
+	border-color: rgba(212, 175, 55, 0.48);
+	box-shadow:
+		inset 0 0.08rem 0 rgba(255, 255, 255, 0.1),
+		0 0.6rem 1rem rgba(0, 0, 0, 0.24);
 }
 
 .lpb-play-shell {

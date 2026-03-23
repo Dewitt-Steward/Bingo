@@ -1,181 +1,177 @@
 {
-  "updatedAt": "2026-03-18T17:50:29.087Z",
+  "updatedAt": "2026-03-22T19:33:04.830Z",
   "orders": {
-    "78854": {
-      "familyId": "78854",
-      "totalBooks": 3,
-      "totalGames": 6,
-      "totalCards": 18,
-      "games": [
-        {
-          "game": 1,
-          "familyId": "78854",
-          "cards": 3,
-          "cardsRemaining": 15
-        },
-        {
-          "game": 2,
-          "familyId": "78854",
-          "cards": 3,
-          "cardsRemaining": 12
-        },
-        {
-          "game": 3,
-          "familyId": "78854",
-          "cards": 3,
-          "cardsRemaining": 9
-        },
-        {
-          "game": 4,
-          "familyId": "78854",
-          "cards": 3,
-          "cardsRemaining": 6
-        },
-        {
-          "game": 5,
-          "familyId": "78854",
-          "cards": 3,
-          "cardsRemaining": 3
-        },
-        {
-          "game": 6,
-          "familyId": "78854",
-          "cards": 3,
-          "cardsRemaining": 0
-        }
-      ]
-    },
-    "78858": {
-      "familyId": "78858",
-      "totalBooks": 32,
-      "totalGames": 6,
-      "totalCards": 192,
-      "games": [
-        {
-          "game": 1,
-          "familyId": "78858",
-          "cards": 32,
-          "cardsRemaining": 160
-        },
-        {
-          "game": 2,
-          "familyId": "78858",
-          "cards": 32,
-          "cardsRemaining": 128
-        },
-        {
-          "game": 3,
-          "familyId": "78858",
-          "cards": 32,
-          "cardsRemaining": 96
-        },
-        {
-          "game": 4,
-          "familyId": "78858",
-          "cards": 32,
-          "cardsRemaining": 64
-        },
-        {
-          "game": 5,
-          "familyId": "78858",
-          "cards": 32,
-          "cardsRemaining": 32
-        },
-        {
-          "game": 6,
-          "familyId": "78858",
-          "cards": 32,
-          "cardsRemaining": 0
-        }
-      ]
-    },
-    "78859": {
-      "familyId": "78859",
-      "totalBooks": 3,
-      "totalGames": 6,
-      "totalCards": 18,
-      "games": [
-        {
-          "game": 1,
-          "familyId": "78859",
-          "cards": 3,
-          "cardsRemaining": 15
-        },
-        {
-          "game": 2,
-          "familyId": "78859",
-          "cards": 3,
-          "cardsRemaining": 12
-        },
-        {
-          "game": 3,
-          "familyId": "78859",
-          "cards": 3,
-          "cardsRemaining": 9
-        },
-        {
-          "game": 4,
-          "familyId": "78859",
-          "cards": 3,
-          "cardsRemaining": 6
-        },
-        {
-          "game": 5,
-          "familyId": "78859",
-          "cards": 3,
-          "cardsRemaining": 3
-        },
-        {
-          "game": 6,
-          "familyId": "78859",
-          "cards": 3,
-          "cardsRemaining": 0
-        }
-      ]
-    },
     "78860": {
       "familyId": "78860",
-      "totalBooks": 80,
-      "totalGames": 6,
-      "totalCards": 480,
       "games": [
         {
           "game": 1,
-          "familyId": "78860",
-          "cards": 80,
-          "cardsRemaining": 400
+          "cards": 4,
+          "cardsRemaining": 20,
+          "cardsAssigned": [
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0001"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0002"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0003"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0004"
+            }
+          ]
         },
         {
           "game": 2,
-          "familyId": "78860",
-          "cards": 80,
-          "cardsRemaining": 320
+          "cards": 4,
+          "cardsRemaining": 16,
+          "cardsAssigned": [
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0005"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0006"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0007"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0008"
+            }
+          ]
         },
         {
           "game": 3,
-          "familyId": "78860",
-          "cards": 80,
-          "cardsRemaining": 240
+          "cards": 4,
+          "cardsRemaining": 12,
+          "cardsAssigned": [
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0009"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0010"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0011"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0066",
+              "BCIN": "0012"
+            }
+          ]
         },
         {
           "game": 4,
-          "familyId": "78860",
-          "cards": 80,
-          "cardsRemaining": 160
+          "cards": 4,
+          "cardsRemaining": 8,
+          "cardsAssigned": [
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0001"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0002"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0003"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0004"
+            }
+          ]
         },
         {
           "game": 5,
-          "familyId": "78860",
-          "cards": 80,
-          "cardsRemaining": 80
+          "cards": 4,
+          "cardsRemaining": 4,
+          "cardsAssigned": [
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0005"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0006"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0007"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0008"
+            }
+          ]
         },
         {
           "game": 6,
-          "familyId": "78860",
-          "cards": 80,
-          "cardsRemaining": 0
+          "cards": 4,
+          "cardsRemaining": 0,
+          "cardsAssigned": [
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0009"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0010"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0011"
+            },
+            {
+              "Tier": "Silver",
+              "BIN": "SI-0067",
+              "BCIN": "0012"
+            }
+          ]
         }
-      ]
+      ],
+      "url": "https://dewitt-steward.github.io/Bingo?familyId=78860",
+      "urls": {
+        "localhost": "http://127.0.0.1:3000/Bingo?familyId=78860",
+        "production": "https://dewitt-steward.github.io/Bingo?familyId=78860"
+      }
     }
   }
 }

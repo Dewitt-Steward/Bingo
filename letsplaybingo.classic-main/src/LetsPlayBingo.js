@@ -66,6 +66,8 @@ const openTableDeals = [
 const radioStreamUrl = 'https://ice41.securenetsystems.net/KOWNLP';
 const radioMetadataUrl = 'https://r.jina.ai/http://https://957fmtheboss.com/?qtproxycall=aHR0cHM6Ly9pY2U0MS5zZWN1cmVuZXRzeXN0ZW1zLm5ldC9LT1dOTFA=&icymetadata=1';
 const radioLogoUrl = 'https://957fmtheboss.com/wp-content/uploads/2020/06/boss_blk.png';
+const localhostJoinBase = 'http://127.0.0.1:3000/Bingo';
+const productionJoinBase = 'https://dewitt-steward.github.io/Bingo';
 
 function getBingoRuntimeConfig() {
 	try {
@@ -78,19 +80,115 @@ function getBingoRuntimeConfig() {
 	}
 }
 
+function isLocalhostRuntime() {
+	if (typeof window === 'undefined') {
+		return false;
+	}
+	const host = String(window.location.hostname || '').toLowerCase();
+	return host === 'localhost' || host === '127.0.0.1';
+}
+
+function isLocalDevRuntime() {
+	return isLocalhostRuntime() && process.env.NODE_ENV !== 'production';
+}
+
 function getSharedSessionEndpoint() {
 	const runtimeConfig = getBingoRuntimeConfig();
 	const configuredUrl = String(runtimeConfig.sessionApiUrl || '').trim();
 	if (configuredUrl) {
 		return configuredUrl;
 	}
-	if (typeof window !== 'undefined') {
-		const host = String(window.location.hostname || '').toLowerCase();
-		if (host === 'localhost' || host === '127.0.0.1') {
-			return '/api/session';
-		}
+	if (isLocalhostRuntime()) {
+		return '/api/session';
 	}
 	return '';
+}
+
+function getOrderSaveEndpoint() {
+	if (!isLocalDevRuntime()) {
+		return '';
+	}
+	return '/api/save-order-json';
+}
+
+function getDeepLinkFamilyIdFromUrl() {
+	if (typeof window === 'undefined') {
+		return '';
+	}
+	try {
+		const params = new URLSearchParams(String(window.location.search || ''));
+		const rawFamilyId = String(params.get('familyId') || '');
+		const cleanedFamilyId = rawFamilyId.replace(/[^\d]/g, '').slice(0, 5);
+		return /^\d{5}$/.test(cleanedFamilyId) ? cleanedFamilyId : '';
+	} catch (e) {
+		return '';
+	}
+}
+
+function buildJoinUrlFromBase(base, familyId) {
+	const cleanFamilyId = String(familyId || '').replace(/[^\d]/g, '').slice(0, 5);
+	if (!/^\d{5}$/.test(cleanFamilyId)) {
+		return '';
+	}
+	const cleanBase = String(base || '').trim().replace(/\/+$/, '');
+	if (!cleanBase) {
+		return '';
+	}
+	if (/\/Bingo$/i.test(cleanBase)) {
+		return `${cleanBase}?familyId=${cleanFamilyId}`;
+	}
+	return `${cleanBase}/Bingo?familyId=${cleanFamilyId}`;
+}
+
+function getTierLabelFromCardsPerGame(cardsPerGame) {
+	const cards = parseInt(cardsPerGame, 10) || 0;
+	if (cards <= 1) return 'Bronze';
+	if (cards === 2) return 'Silver';
+	if (cards === 3) return 'Gold';
+	return 'Platinum';
+}
+
+function getCardsPerGameFromOrder(order) {
+	if (!order || typeof order !== 'object') return 0;
+	const games = Array.isArray(order.games) ? order.games : [];
+	const cardsFromGame = parseInt((games[0] && games[0].cards) || 0, 10) || 0;
+	return cardsFromGame || (parseInt(order.totalBooks, 10) || 0);
+}
+
+function normalizePlayersEntry(entry, familyIdHint) {
+	const source = entry && typeof entry === 'object' ? entry : {};
+	const familyId = String(source.familyId || familyIdHint || '').replace(/[^\d]/g, '').slice(0, 5);
+	if (!/^\d{5}$/.test(familyId)) return null;
+	const cardsPerGame = parseInt(source.cardsPerGame, 10) || getCardsPerGameFromOrder(source);
+	const tier = String(source.tier || getTierLabelFromCardsPerGame(cardsPerGame));
+	const sourceUrls = source.urls && typeof source.urls === 'object' ? source.urls : {};
+	const fallbackUrl = String(source.url || '').trim();
+	const localhostUrl = String(sourceUrls.localhost || '').trim();
+	const productionUrl = String(sourceUrls.production || '').trim();
+	const fallbackIsLocal = fallbackUrl.includes('127.0.0.1') || fallbackUrl.includes('localhost');
+	return {
+		familyId,
+		tier,
+		cardsPerGame,
+		urls: {
+			localhost:
+				localhostUrl ||
+				(fallbackIsLocal ? fallbackUrl : '') ||
+				buildJoinUrlFromBase(localhostJoinBase, familyId),
+			production:
+				productionUrl ||
+				(!fallbackIsLocal ? fallbackUrl : '') ||
+				buildJoinUrlFromBase(productionJoinBase, familyId),
+		},
+	};
+}
+
+function buildPlayersListFromOrdersMap(ordersMap) {
+	const entries = ordersMap && typeof ordersMap === 'object' ? Object.entries(ordersMap) : [];
+	return entries
+		.map(([familyId, order]) => normalizePlayersEntry(order, familyId))
+		.filter(Boolean)
+		.sort((a, b) => a.familyId.localeCompare(b.familyId));
 }
 
 function shuffleList(values) {
@@ -140,8 +238,71 @@ function generateRandomBingoDeck(cardCount) {
 	return uniqueCards;
 }
 
-function isMarkedCellValue(value, calledNumbersSet) {
-	if (value === 'FREE') return true;
+function normalizeAssignedCard(card) {
+	if (!card || typeof card !== 'object') return null;
+	const normalized = {
+		Tier: card.Tier || card.tier || '',
+		BIN: card.BIN || '',
+		BCIN: card.BCIN || '',
+		B: Array.isArray(card.B) ? card.B : [],
+		I: Array.isArray(card.I) ? card.I : [],
+		N: Array.isArray(card.N) ? card.N : [],
+		G: Array.isArray(card.G) ? card.G : [],
+		O: Array.isArray(card.O) ? card.O : [],
+	};
+	const hasValidColumns = bingoLetters.every((letter) => Array.isArray(normalized[letter]) && normalized[letter].length === 5);
+	return hasValidColumns ? normalized : null;
+}
+
+function normalizeOrderForGame(order, selectedGameIndex) {
+	if (!order || typeof order !== 'object') return null;
+	const gameNumber = parseInt(selectedGameIndex, 10) || 0;
+	const games = Array.isArray(order.games) ? order.games : [];
+	if (gameNumber < 1) {
+		const cardsAssigned = games.flatMap((entry) => (
+			Array.isArray(entry && entry.cardsAssigned) ? entry.cardsAssigned : []
+		));
+		const playCardDeck = Array.isArray(order.playCardDeck) ? order.playCardDeck : [];
+		const totalCardsFromGames = games.reduce((sum, entry) => sum + (parseInt((entry && entry.cards) || 0, 10) || 0), 0);
+		return {
+			...order,
+			totalCards: totalCardsFromGames || (parseInt(order.totalCards, 10) || cardsAssigned.length || 0),
+			gameNumber: 0,
+			cardsRemaining: 0,
+			cardsAssigned,
+			playCardDeck,
+		};
+	}
+	const gameEntry = games.find((entry) => (parseInt(entry && entry.game, 10) || 0) === gameNumber);
+	if (!gameEntry) return null;
+	const cardsAssigned = Array.isArray(gameEntry.cardsAssigned)
+		? gameEntry.cardsAssigned
+		: (Array.isArray(order.cardsAssigned) ? order.cardsAssigned : []);
+	const playCardDeck = Array.isArray(gameEntry.gameCardDeck)
+		? gameEntry.gameCardDeck
+		: (Array.isArray(order.playCardDeck) ? order.playCardDeck : []);
+	return {
+		...order,
+		totalCards: parseInt(gameEntry.cards, 10) || 0,
+		gameNumber,
+		cardsRemaining: parseInt(gameEntry.cardsRemaining, 10) || 0,
+		cardsAssigned,
+		playCardDeck,
+	};
+}
+
+function buildPlayCardDeck(orderData) {
+	const assignedDeck = Array.isArray(orderData && orderData.playCardDeck) ? orderData.playCardDeck : [];
+	const normalizedDeck = assignedDeck.map(normalizeAssignedCard).filter(Boolean);
+	if (normalizedDeck.length > 0) {
+		return normalizedDeck;
+	}
+	const fallbackCount = parseInt(orderData && orderData.totalCards, 10) || 0;
+	return generateRandomBingoDeck(fallbackCount);
+}
+
+function isMarkedCellValue(value, calledNumbersSet, markFreeSpace = true) {
+	if (value === 'FREE') return !!markFreeSpace;
 	const numericValue = parseInt(value, 10);
 	if (Number.isNaN(numericValue)) return false;
 	return calledNumbersSet.has(numericValue);
@@ -171,13 +332,13 @@ function hasPatternSelections(pattern) {
 	});
 }
 
-function cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern) {
+function cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern, markFreeSpace = true) {
 	if (!cardData || !hasPatternSelections(pattern)) return false;
 	return bingoLetters.every((letter) => {
 		const patternColumn = Array.isArray(pattern[letter]) ? pattern[letter] : [];
 		const cardColumn = Array.isArray(cardData[letter]) ? cardData[letter] : [];
 		for (let row = 0; row < 5; row += 1) {
-			if (patternColumn[row] && !isMarkedCellValue(cardColumn[row], calledNumbersSet)) {
+			if (patternColumn[row] && !isMarkedCellValue(cardColumn[row], calledNumbersSet, markFreeSpace)) {
 				return false;
 			}
 		}
@@ -185,7 +346,7 @@ function cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern) {
 	});
 }
 
-function cardHasClassicBingo(cardData, calledNumbersSet) {
+function cardHasClassicBingo(cardData, calledNumbersSet, markFreeSpace = true) {
 	if (!cardData) return false;
 	const grid = Array.from({ length: 5 }, (_, rowIndex) => (
 		bingoLetters.map((letter) => {
@@ -193,26 +354,26 @@ function cardHasClassicBingo(cardData, calledNumbersSet) {
 			return column[rowIndex];
 		})
 	));
-	const hasWinningRow = grid.some((row) => row.every((value) => isMarkedCellValue(value, calledNumbersSet)));
+	const hasWinningRow = grid.some((row) => row.every((value) => isMarkedCellValue(value, calledNumbersSet, markFreeSpace)));
 	if (hasWinningRow) return true;
 	const hasWinningColumn = bingoLetters.some((_, colIndex) => (
-		grid.every((row) => isMarkedCellValue(row[colIndex], calledNumbersSet))
+		grid.every((row) => isMarkedCellValue(row[colIndex], calledNumbersSet, markFreeSpace))
 	));
 	if (hasWinningColumn) return true;
-	const hasPrimaryDiagonal = grid.every((row, index) => isMarkedCellValue(row[index], calledNumbersSet));
+	const hasPrimaryDiagonal = grid.every((row, index) => isMarkedCellValue(row[index], calledNumbersSet, markFreeSpace));
 	if (hasPrimaryDiagonal) return true;
-	const hasSecondaryDiagonal = grid.every((row, index) => isMarkedCellValue(row[4 - index], calledNumbersSet));
+	const hasSecondaryDiagonal = grid.every((row, index) => isMarkedCellValue(row[4 - index], calledNumbersSet, markFreeSpace));
 	return hasSecondaryDiagonal;
 }
 
-function cardHasBingo(cardData, calledNumbersSet, pattern) {
+function cardHasBingo(cardData, calledNumbersSet, pattern, markFreeSpace = true) {
 	if (hasPatternSelections(pattern)) {
-		return cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern);
+		return cardMatchesSelectedPattern(cardData, calledNumbersSet, pattern, markFreeSpace);
 	}
-	return cardHasClassicBingo(cardData, calledNumbersSet);
+	return cardHasClassicBingo(cardData, calledNumbersSet, markFreeSpace);
 }
 
-function getCentralDateAccessCode() {
+function getCentralCalendarAccessCode(offsetDays = 0) {
 	try {
 		const formatter = new Intl.DateTimeFormat('en-US', {
 			timeZone: 'America/Chicago',
@@ -224,14 +385,28 @@ function getCentralDateAccessCode() {
 		const month = (parts.find((part) => part.type === 'month') || {}).value || '01';
 		const day = (parts.find((part) => part.type === 'day') || {}).value || '01';
 		const year = (parts.find((part) => part.type === 'year') || {}).value || '1970';
-		return `${month}${day}${year}`;
+		const baseDate = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 12, 0, 0));
+		baseDate.setUTCDate(baseDate.getUTCDate() + (parseInt(offsetDays, 10) || 0));
+		const targetMonth = String(baseDate.getUTCMonth() + 1).padStart(2, '0');
+		const targetDay = String(baseDate.getUTCDate()).padStart(2, '0');
+		const targetYear = String(baseDate.getUTCFullYear());
+		return `${targetMonth}${targetDay}${targetYear}`;
 	} catch (e) {
 		const fallback = new Date();
+		fallback.setDate(fallback.getDate() + (parseInt(offsetDays, 10) || 0));
 		const month = String(fallback.getMonth() + 1).padStart(2, '0');
 		const day = String(fallback.getDate()).padStart(2, '0');
 		const year = String(fallback.getFullYear());
 		return `${month}${day}${year}`;
 	}
+}
+
+function getCentralDateAccessCode() {
+	return getCentralCalendarAccessCode(0);
+}
+
+function getCentralTomorrowAccessCode() {
+	return getCentralCalendarAccessCode(1);
 }
 
 function getBcinStart(familyId, totalCards) {
@@ -381,6 +556,8 @@ class LetsPlayBingo extends Component {
 		this.sharedSessionPoller = null;
 		this.sharedSessionUpdatedAt = '';
 		this.isApplyingSharedSession = false;
+		this.deepLinkFamilyId = '';
+		this.deepLinkLoadedKey = '';
 		try {
 			window.name = 'lpb_caller_window';
 		} catch (e) {}
@@ -484,6 +661,9 @@ class LetsPlayBingo extends Component {
 			playLookupLoading: false,
 			playOrderData: null,
 			playCardDeck: [],
+			playersList: [],
+			playersLoading: false,
+			playersError: '',
 			bingoDetectedPin: '',
 			playPage: 0,
 			patternResetToken: 0,
@@ -493,6 +673,9 @@ class LetsPlayBingo extends Component {
 			showHostAccessDialog: false,
 			hostAccessInput: '',
 			hostAccessError: '',
+			showHostSignoutDialog: false,
+			hostSignoutDateInput: '',
+			hostSignoutError: '',
 			headerMenuSelection: '',
 			showOpenTableDialog: false,
 			openTableDeal: openTableDeals[0],
@@ -549,8 +732,28 @@ class LetsPlayBingo extends Component {
 	}
 
 	componentDidMount() {
+		if (!isLocalDevRuntime() && this.state.activeScreen === 'order') {
+			this.setState({ activeScreen: 'caller', orderSaveMessage: '' });
+		}
 		this.fetchSharedSession();
 		this.startSharedSessionPolling();
+		if (this.state.activeScreen === 'players') {
+			this.loadPlayersList();
+		}
+		const deepLinkFamilyId = getDeepLinkFamilyIdFromUrl();
+		if (deepLinkFamilyId) {
+			this.deepLinkFamilyId = deepLinkFamilyId;
+			this.setState(
+				{
+					activeScreen: 'join_session',
+					playFamilyIdInput: deepLinkFamilyId,
+					playLookupError: '',
+				},
+				() => {
+					this.maybeLoadDeepLinkedOrder();
+				}
+			);
+		}
 	}
 
 	componentWillUnmount() {
@@ -899,7 +1102,8 @@ class LetsPlayBingo extends Component {
 		if (!deck.length) return false;
 		const calledNumbersSet = this.getCalledNumbersSet(state.balls);
 		const selectedPattern = getStoredPatternConfig();
-		return deck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern));
+		const markFreeSpace = this.isGameInSession(state);
+		return deck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern, markFreeSpace));
 	};
 
 	createBingoPin = () => {
@@ -913,11 +1117,61 @@ class LetsPlayBingo extends Component {
 		return `${hh}${mm}${ss}${cs}`;
 	};
 
-	componentDidUpdate() {
+	componentDidUpdate(prevProps, prevState) {
 		let stateCopy = { ...this.state };
 		delete stateCopy.showAlert;
 		delete stateCopy.showBackdrop;
 		localStorage.setItem('lpbclassic', JSON.stringify(stateCopy));
+		const didGameSelectionChange =
+			prevState.selectedTableDeal !== this.state.selectedTableDeal ||
+			prevState.selectedTableDealIndex !== this.state.selectedTableDealIndex;
+		if (
+			this.deepLinkFamilyId &&
+			(didGameSelectionChange || prevState.playFamilyIdInput !== this.state.playFamilyIdInput)
+		) {
+			this.maybeLoadDeepLinkedOrder();
+		} else if (
+			didGameSelectionChange &&
+			(this.state.activeScreen === 'join_session' || this.state.activeScreen === 'play') &&
+			/^\d{5}$/.test(String(this.state.playFamilyIdInput || '').replace(/[^\d]/g, '').slice(0, 5))
+		) {
+			this.loadPlayOrder();
+		}
+	};
+
+	maybeLoadDeepLinkedOrder = () => {
+		const deepLinkFamilyId = String(this.deepLinkFamilyId || '').replace(/[^\d]/g, '').slice(0, 5);
+		const selectedGameIndex = this.getSelectedGameIndexOrZero();
+		if (!/^\d{5}$/.test(deepLinkFamilyId)) {
+			return;
+		}
+		const loadKey = `${deepLinkFamilyId}:${selectedGameIndex > 0 ? selectedGameIndex : 'all'}`;
+		if (this.deepLinkLoadedKey === loadKey) {
+			return;
+		}
+		this.deepLinkLoadedKey = loadKey;
+		if (String(this.state.playFamilyIdInput || '') !== deepLinkFamilyId) {
+			this.setState({ playFamilyIdInput: deepLinkFamilyId, playLookupError: '' }, () => {
+				this.loadPlayOrder();
+			});
+			return;
+		}
+		this.loadPlayOrder();
+	};
+
+	getSelectedGameIndexOrZero = () => {
+		const selectedGameIndex = parseInt(this.state.selectedTableDealIndex, 10) || 0;
+		if (selectedGameIndex >= 1 && selectedGameIndex <= 6) {
+			return selectedGameIndex;
+		}
+		return 0;
+	};
+
+	isGameInSession = (stateRef) => {
+		const sourceState = stateRef || this.state;
+		const selectedGameIndex = parseInt(sourceState.selectedTableDealIndex, 10) || 0;
+		const hasSelectedDeal = !!String(sourceState.selectedTableDeal || '').trim();
+		return hasSelectedDeal && selectedGameIndex >= 1 && selectedGameIndex <= 6;
 	};
 
 	say = () => {};
@@ -1072,6 +1326,15 @@ class LetsPlayBingo extends Component {
 	};
 
 	openHostAccessDialog = () => {
+		if (this.state.hostVerified) {
+			document.body.classList.add('backdrop-visible');
+			this.setState({
+				showHostSignoutDialog: true,
+				hostSignoutDateInput: '',
+				hostSignoutError: '',
+			});
+			return;
+		}
 		document.body.classList.add('backdrop-visible');
 		this.setState({
 			showHostAccessDialog: true,
@@ -1081,12 +1344,23 @@ class LetsPlayBingo extends Component {
 	};
 
 	closeHostAccessDialog = () => {
-		if (!this.state.showConfirm && !this.state.showAlert && !this.state.showOpenTableDialog) {
+		if (!this.state.showConfirm && !this.state.showAlert && !this.state.showOpenTableDialog && !this.state.showHostSignoutDialog) {
 			document.body.classList.remove('backdrop-visible');
 		}
 		this.setState({
 			showHostAccessDialog: false,
 			hostAccessError: '',
+		});
+	};
+
+	closeHostSignoutDialog = () => {
+		if (!this.state.showConfirm && !this.state.showAlert && !this.state.showOpenTableDialog && !this.state.showHostAccessDialog) {
+			document.body.classList.remove('backdrop-visible');
+		}
+		this.setState({
+			showHostSignoutDialog: false,
+			hostSignoutDateInput: '',
+			hostSignoutError: '',
 		});
 	};
 
@@ -1096,6 +1370,24 @@ class LetsPlayBingo extends Component {
 			hostAccessInput: cleanedValue,
 			hostAccessError: '',
 		});
+	};
+
+	handleHostSignoutDateInputChange = (e) => {
+		const cleanedValue = String(e.target.value || '').replace(/[^\d]/g, '').slice(0, 8);
+		this.setState({
+			hostSignoutDateInput: cleanedValue,
+			hostSignoutError: '',
+		});
+	};
+
+	confirmHostSignout = () => {
+		const expected = getCentralTomorrowAccessCode();
+		const provided = String(this.state.hostSignoutDateInput || '').replace(/[^\d]/g, '').slice(0, 8);
+		if (provided !== expected) {
+			this.setState({ hostSignoutError: "Enter tomorrow's date (MMDDYYYY) to continue." });
+			return;
+		}
+		this.closeTable();
 	};
 
 	verifyHostAccess = () => {
@@ -1158,6 +1450,13 @@ class LetsPlayBingo extends Component {
 	};
 
 	openOrderScreen = () => {
+		if (!isLocalDevRuntime()) {
+			this.setState({
+				activeScreen: 'caller',
+				orderSaveMessage: 'Order/Generate is only available on localhost dev server.',
+			});
+			return;
+		}
 		this.setState({ activeScreen: 'order' });
 	};
 
@@ -1173,15 +1472,65 @@ class LetsPlayBingo extends Component {
 		});
 	};
 
+	openPlayersScreen = () => {
+		this.setState({
+			activeScreen: 'players',
+			playersError: '',
+		}, () => {
+			this.loadPlayersList();
+		});
+	};
+
 	closePlayScreen = () => {
 		this.setState({
 			activeScreen: 'caller',
 		});
 	};
 
+	loadPlayersList = async () => {
+		this.setState({
+			playersLoading: true,
+			playersError: '',
+		});
+		try {
+			let playersList = [];
+			try {
+				const response = await fetch('/api/books');
+				if (!response.ok) {
+					throw new Error('api_not_found');
+				}
+				const result = await response.json();
+				const apiPlayers = Array.isArray(result && result.players) ? result.players : [];
+				playersList = apiPlayers
+					.map((entry) => normalizePlayersEntry(entry))
+					.filter(Boolean)
+					.sort((a, b) => a.familyId.localeCompare(b.familyId));
+			} catch (apiError) {
+				const publicUrl = process.env.PUBLIC_URL || '';
+				const staticBooksUrl = `${publicUrl}/Books.json`;
+				const staticResponse = await fetch(staticBooksUrl);
+				if (!staticResponse.ok) {
+					throw new Error('not_found');
+				}
+				const staticData = await staticResponse.json();
+				playersList = buildPlayersListFromOrdersMap(staticData && staticData.orders ? staticData.orders : {});
+			}
+			this.setState({
+				playersLoading: false,
+				playersList,
+				playersError: '',
+			});
+		} catch (e) {
+			this.setState({
+				playersLoading: false,
+				playersList: [],
+				playersError: 'Unable to load players list.',
+			});
+		}
+	};
+
 	handleHeaderMenuChange = (e) => {
 		const selected = String(e.target.value || '');
-		const canJoinSession = Boolean(this.state.selectedTableDeal);
 		if (selected === 'board') {
 			this.setState({
 				headerMenuSelection: '',
@@ -1191,15 +1540,24 @@ class LetsPlayBingo extends Component {
 			return;
 		}
 		if (selected === 'join_session') {
-			if (!canJoinSession) {
-				this.setState({ headerMenuSelection: '' });
-				return;
-			}
 			this.setState({ headerMenuSelection: '' });
 			this.openPlayScreen();
 			return;
 		}
+		if (selected === 'players') {
+			this.setState({ headerMenuSelection: '' });
+			this.openPlayersScreen();
+			return;
+		}
 		if (selected === 'order') {
+			if (!isLocalDevRuntime()) {
+				this.setState({
+					headerMenuSelection: '',
+					activeScreen: 'caller',
+					orderSaveMessage: 'Order/Generate is only available on localhost dev server.',
+				});
+				return;
+			}
 			this.setState({ headerMenuSelection: '' });
 			this.openOrderScreen();
 			return;
@@ -1219,28 +1577,31 @@ class LetsPlayBingo extends Component {
 
 	handlePlayFamilyIdChange = (e) => {
 		const cleanedValue = String(e.target.value || '').replace(/[^\d]/g, '').slice(0, 5);
+		const isValidFamilyId = /^\d{5}$/.test(cleanedValue);
 		this.setState({
 			playFamilyIdInput: cleanedValue,
 			playLookupError: '',
+			...(isValidFamilyId
+				? {}
+				: {
+					playOrderData: null,
+					playCardDeck: [],
+					bingoDetectedPin: '',
+					playPage: 0,
+				}),
+		}, () => {
+			if (isValidFamilyId) {
+				this.loadPlayOrder();
+			}
 		});
 	};
 
 	loadPlayOrder = async () => {
 		const familyId = String(this.state.playFamilyIdInput || '').replace(/[^\d]/g, '').slice(0, 5);
-		const selectedGameIndex = parseInt(this.state.selectedTableDealIndex, 10) || 0;
+		const selectedGameIndex = this.getSelectedGameIndexOrZero();
 		if (!/^\d{5}$/.test(familyId)) {
 			this.setState({
 				playLookupError: 'Enter a valid 5 digit Family ID.',
-				playOrderData: null,
-				playCardDeck: [],
-				bingoDetectedPin: '',
-				playPage: 0,
-			});
-			return;
-		}
-		if (selectedGameIndex < 1 || selectedGameIndex > 6 || !this.state.selectedTableDeal) {
-			this.setState({
-				playLookupError: 'Open Table first to start a session.',
 				playOrderData: null,
 				playCardDeck: [],
 				bingoDetectedPin: '',
@@ -1255,12 +1616,16 @@ class LetsPlayBingo extends Component {
 		try {
 			let orderData = null;
 			try {
-				const response = await fetch(`/api/books/${familyId}?game=${selectedGameIndex}`);
+				const endpoint = selectedGameIndex > 0
+					? `/api/books/${familyId}?game=${selectedGameIndex}`
+					: `/api/books/${familyId}`;
+				const response = await fetch(endpoint);
 				if (!response.ok) {
 					throw new Error('api_not_found');
 				}
 				const result = await response.json();
-				orderData = result && result.order ? result.order : null;
+				const apiOrder = result && result.order ? result.order : null;
+				orderData = normalizeOrderForGame(apiOrder, selectedGameIndex) || apiOrder;
 			} catch (apiError) {
 				const publicUrl = process.env.PUBLIC_URL || '';
 				const staticBooksUrl = `${publicUrl}/Books.json`;
@@ -1269,17 +1634,18 @@ class LetsPlayBingo extends Component {
 					throw new Error('not_found');
 				}
 				const staticData = await staticResponse.json();
-				orderData =
+				const staticOrder =
 					staticData &&
 					staticData.orders &&
 					staticData.orders[familyId]
 						? staticData.orders[familyId]
 						: null;
+				orderData = normalizeOrderForGame(staticOrder, selectedGameIndex) || staticOrder;
 			}
 			if (!orderData || typeof orderData.totalCards !== 'number') {
 				throw new Error('not_found');
 			}
-			const generatedDeck = generateRandomBingoDeck(orderData.totalCards);
+			const generatedDeck = buildPlayCardDeck(orderData);
 			this.setState({
 				playLookupLoading: false,
 				playLookupError: '',
@@ -1314,21 +1680,14 @@ class LetsPlayBingo extends Component {
 		}));
 	};
 
-	downloadOrderJson = (payload) => {
-		const blob = new Blob([JSON.stringify(payload, null, 2)], {
-			type: 'application/json',
-		});
-		const downloadUrl = window.URL.createObjectURL(blob);
-		const link = document.createElement('a');
-		link.href = downloadUrl;
-		link.download = 'Books.json';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		window.URL.revokeObjectURL(downloadUrl);
-	};
-
 	generateOrderJson = async (familyId, totalBooks) => {
+		const endpoint = getOrderSaveEndpoint();
+		if (!endpoint) {
+			this.setState({
+				orderSaveMessage: 'Generate is only available on localhost dev server and writes to Bingo/Books.json.',
+			});
+			return;
+		}
 		const totalGames = 6;
 		const cardsPerGame = totalBooks;
 		const totalCards = totalBooks * totalGames;
@@ -1350,29 +1709,30 @@ class LetsPlayBingo extends Component {
 			games,
 		};
 		try {
-			const response = await fetch('/api/save-order-json', {
+			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify(payload),
 			});
-			if (!response.ok) {
-				throw new Error('save_failed');
+				if (!response.ok) {
+					throw new Error('save_failed');
+				}
+				const result = await response.json();
+				const didWriteBooksFile = result && result.fileName === 'Books.json' && result.path;
+				if (!didWriteBooksFile) {
+					throw new Error('save_not_confirmed');
+				}
+				this.setState({
+					orderSaveMessage: `Updated ${result.fileName} for Family ID ${familyId} in ${result.path}`,
+				});
+			} catch (e) {
+				this.setState({
+					orderSaveMessage: 'Save failed. Books.json in the Bingo folder was not updated.',
+				});
 			}
-			const result = await response.json();
-			this.setState({
-				orderSaveMessage: result && result.path
-					? `Updated ${result.fileName} for Family ID ${familyId} in ${result.path}`
-					: 'Saved Books.json',
-			});
-		} catch (e) {
-			this.downloadOrderJson(payload);
-			this.setState({
-				orderSaveMessage: 'Downloaded Books.json',
-			});
-		}
-	};
+		};
 
 
 	startGame = () => {
@@ -1418,6 +1778,9 @@ class LetsPlayBingo extends Component {
 				showHostAccessDialog: false,
 				hostAccessInput: '',
 				hostAccessError: '',
+				showHostSignoutDialog: false,
+				hostSignoutDateInput: '',
+				hostSignoutError: '',
 				boardControlState: this.state.hostVerified ? 'host_ready' : 'needs_host',
 				playPage: 0,
 				patternResetToken: nextPatternResetToken,
@@ -1459,6 +1822,9 @@ class LetsPlayBingo extends Component {
 				showHostAccessDialog: false,
 				hostAccessInput: '',
 				hostAccessError: '',
+				showHostSignoutDialog: false,
+				hostSignoutDateInput: '',
+				hostSignoutError: '',
 				hostVerified: false,
 				activeScreen: 'caller',
 				headerMenuSelection: '',
@@ -1572,7 +1938,7 @@ class LetsPlayBingo extends Component {
 	};
 
 	get backdropClasses() {
-		return this.state.showBackdrop || this.state.showOpenTableDialog || this.state.showHostAccessDialog ? 'show' : 'hide';
+		return this.state.showBackdrop || this.state.showOpenTableDialog || this.state.showHostAccessDialog || this.state.showHostSignoutDialog ? 'show' : 'hide';
 	}
 	get alertClasses() {
 		return this.state.showAlert ? 'show text-center' : 'hide';
@@ -1633,10 +1999,14 @@ class LetsPlayBingo extends Component {
 		const isJoinSessionScreen =
 			this.state.activeScreen === 'join_session' || this.state.activeScreen === 'play';
 		const isPlayCardsVisible = isJoinSessionScreen && !!this.state.playOrderData;
+		const previousCallsCount = 5;
 		const priorCallHistoryForPlay = activeBall
-			? this.state.callHistory.slice(Math.max(totalCalls - 7, 0), Math.max(totalCalls - 1, 0))
-			: this.state.callHistory.slice(Math.max(totalCalls - 6, 0));
-		const previousBallSlotsForPlay = Array.from({ length: 6 }, (_, index) => priorCallHistoryForPlay[index] || null);
+			? this.state.callHistory.slice(
+				Math.max(totalCalls - (previousCallsCount + 1), 0),
+				Math.max(totalCalls - 1, 0)
+			)
+			: this.state.callHistory.slice(Math.max(totalCalls - previousCallsCount, 0));
+		const previousBallSlotsForPlay = Array.from({ length: previousCallsCount }, (_, index) => priorCallHistoryForPlay[index] || null);
 		const playVisibleCards = Array.from(
 			{ length: Math.max(0, Math.min(4, playTotalCards - (playPage * 4))) },
 			(_, index) => playStartCard + index
@@ -1649,7 +2019,8 @@ class LetsPlayBingo extends Component {
 				.filter((number) => !Number.isNaN(number))
 		);
 		const selectedPattern = getStoredPatternConfig();
-		const hasBingoCard = playCardDeck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern));
+		const markFreeSpace = this.isGameInSession();
+		const hasBingoCard = playCardDeck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern, markFreeSpace));
 		const bingoDetectedPin = this.state.bingoDetectedPin || '';
 		const radioNowPlayingParts = this.parseRadioNowPlayingParts(this.state.radioNowPlaying);
 		const radioVisualizerLevels = Array.isArray(this.state.radioVisualizerLevels)
@@ -1665,7 +2036,12 @@ class LetsPlayBingo extends Component {
 		const selectedTableDealLine = hasSelectedTableDeal
 			? `${this.state.selectedTableDeal}`
 			: '';
-		const canJoinSession = Boolean(hasSelectedTableDeal);
+		const isPlayerLinkMode = !!getDeepLinkFamilyIdFromUrl();
+		const canUseLocalOrderGeneration = isLocalDevRuntime() && !isPlayerLinkMode;
+		const isOrderScreen = this.state.activeScreen === 'order' && canUseLocalOrderGeneration;
+		const isPlayersScreen = this.state.activeScreen === 'players';
+		const canJoinSession = true;
+		const playersList = Array.isArray(this.state.playersList) ? this.state.playersList : [];
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const getBallColor = (letter) => {
 			switch (letter) {
@@ -1754,7 +2130,7 @@ class LetsPlayBingo extends Component {
 		const controlsPanel = (
 			<div className="row lpb-buttons-controls-row">
 				<div className="col c100">
-					{this.state.activeScreen === 'order' ? (
+					{isOrderScreen ? (
 						<>
 							<button
 								className="lpb-btn lpb-btn-order"
@@ -1764,7 +2140,7 @@ class LetsPlayBingo extends Component {
 								Generate
 							</button>
 						</>
-					) : isJoinSessionScreen ? (
+					) : isPlayersScreen ? null : isJoinSessionScreen ? (
 						<div className="lpb-join-controls">
 							{hasBingoCard ? (
 								<button className="lpb-btn lpb-btn-bingo" onClick={this.handleBingo}>Bingo</button>
@@ -1776,9 +2152,7 @@ class LetsPlayBingo extends Component {
 					) : (
 						<div className="lpb-board-controls">
 							<div className="lpb-board-controls-buttons">
-								{!this.state.hostVerified && boardControlState === 'needs_host' ? (
-									<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host Access</button>
-								) : null}
+								<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host Access</button>
 								{this.state.hostVerified && boardControlState === 'host_ready' ? (
 									<>
 										<button className="lpb-btn lpb-btn-open-table" onClick={this.openTableDialog}>Open Floor</button>
@@ -1899,32 +2273,62 @@ class LetsPlayBingo extends Component {
 						<button className="lpb-btn lpb-btn-clear" onClick={this.closeHostAccessDialog}>Cancel</button>
 					</p>
 				</div>
+				<div id="host-signout-dialog" className={this.state.showHostSignoutDialog ? 'show' : 'hide'}>
+					<h4 className="no-margin">Host Access Active</h4>
+					<p className="small-text">Host access is already active on this board. Sign out the current host before continuing.</p>
+					<div className="lpb-open-table-field">
+						<label htmlFor="lpb-host-signout-date-input">Tomorrow&apos;s Date (MMDDYYYY)</label>
+						<input
+							id="lpb-host-signout-date-input"
+							type="text"
+							inputMode="numeric"
+							maxLength="8"
+							value={this.state.hostSignoutDateInput}
+							onChange={this.handleHostSignoutDateInputChange}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter') this.confirmHostSignout();
+							}}
+						/>
+					</div>
+					{this.state.hostSignoutError ? (
+						<p className="small-text lpb-host-access-error">{this.state.hostSignoutError}</p>
+					) : null}
+					<p>
+						<button className="lpb-btn lpb-btn-close-table" onClick={this.confirmHostSignout}>Sign out</button> |{' '}
+						<button className="lpb-btn lpb-btn-clear" onClick={this.closeHostSignoutDialog}>Cancel</button>
+					</p>
+				</div>
 
-				<header>
-					<div className="row">
-						<div className="col c100">
-							<div className="logo-block">
-								<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
-								<div className="lpb-header-menu">
-									<select
-										id="lpb-header-menu-select"
-										value={this.state.headerMenuSelection}
-										onChange={this.handleHeaderMenuChange}
-									>
-										<option value="" disabled hidden>Menu</option>
-										<option value="board">Board</option>
-										{canJoinSession ? (
-											<option value="join_session">Join a Session</option>
-										) : null}
-										<option value="order">Order</option>
-									</select>
+				{!isPlayerLinkMode ? (
+					<header>
+						<div className="row">
+							<div className="col c100">
+								<div className="logo-block">
+									<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
+									<div className="lpb-header-menu">
+										<select
+											id="lpb-header-menu-select"
+											value={this.state.headerMenuSelection}
+											onChange={this.handleHeaderMenuChange}
+										>
+											<option value="" disabled hidden>Menu</option>
+											<option value="board">Board</option>
+											{canJoinSession ? (
+												<option value="join_session">Join a Session</option>
+											) : null}
+											<option value="players">Players</option>
+											{canUseLocalOrderGeneration ? (
+												<option value="order">Order</option>
+											) : null}
+										</select>
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
-				</header>
+					</header>
+				) : null}
 
-				{this.state.activeScreen === 'order' ? (
+				{isOrderScreen ? (
 					<section id="board">
 						<div className="row lpb-order-shell">
 							<div className="lpb-order-panel">
@@ -2012,34 +2416,103 @@ class LetsPlayBingo extends Component {
 							</div>
 						</div>
 					</section>
+				) : isPlayersScreen ? (
+					<section id="board">
+						<div className="row lpb-players-shell">
+							<div className="lpb-order-panel lpb-players-panel">
+								<div className="lpb-order-header">
+									<h2>Players</h2>
+									<p>All players, assigned tier, cards per game, and player links.</p>
+								</div>
+								{this.state.playersLoading ? (
+									<div className="lpb-players-status">Loading players...</div>
+								) : null}
+								{this.state.playersError ? (
+									<div className="lpb-players-error">{this.state.playersError}</div>
+								) : null}
+								{!this.state.playersLoading && !this.state.playersError ? (
+									playersList.length > 0 ? (
+										<div className="lpb-players-table-wrap">
+											<table className="lpb-players-table">
+												<thead>
+													<tr>
+														<th>Family ID</th>
+														<th>Tier</th>
+														<th>Cards/Game</th>
+														<th>Localhost</th>
+														<th>Production</th>
+													</tr>
+												</thead>
+												<tbody>
+													{playersList.map((player) => (
+														<tr key={`player-row-${player.familyId}`}>
+															<td>{player.familyId}</td>
+															<td>{player.tier}</td>
+															<td>{player.cardsPerGame}</td>
+															<td>
+																<a
+																	className="lpb-players-link-btn"
+																	href={player.urls.localhost}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																	title={player.urls.localhost}
+																>
+																	Localhost
+																</a>
+															</td>
+															<td>
+																<a
+																	className="lpb-players-link-btn"
+																	href={player.urls.production}
+																	target="_blank"
+																	rel="noopener noreferrer"
+																	title={player.urls.production}
+																>
+																	Production
+																</a>
+															</td>
+														</tr>
+													))}
+												</tbody>
+											</table>
+										</div>
+									) : (
+										<div className="lpb-players-status">No players found.</div>
+									)
+								) : null}
+							</div>
+						</div>
+					</section>
 				) : isJoinSessionScreen ? (
 					<section id="board">
 		<div className={`row lpb-play-shell lpb-play-panel lpb-play-room lpb-play-room-${playRoom.key}`}>
-							<div className="lpb-play-lookup-inline">
-								<div className="lpb-play-inline-field">
-									<label htmlFor="lpb-play-family-id-inline">Family ID</label>
-									<input
-										id="lpb-play-family-id-inline"
-										type="text"
-										inputMode="numeric"
-										maxLength="5"
-										value={this.state.playFamilyIdInput}
-										onChange={this.handlePlayFamilyIdChange}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter') {
-												this.loadPlayOrder();
-											}
-										}}
-									/>
+							{!isPlayerLinkMode ? (
+								<div className="lpb-play-lookup-inline">
+									<div className="lpb-play-inline-field">
+										<label htmlFor="lpb-play-family-id-inline">Family ID</label>
+										<input
+											id="lpb-play-family-id-inline"
+											type="text"
+											inputMode="numeric"
+											maxLength="5"
+											value={this.state.playFamilyIdInput}
+											onChange={this.handlePlayFamilyIdChange}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter') {
+													this.loadPlayOrder();
+												}
+											}}
+										/>
+									</div>
+									<button
+										className="lpb-btn lpb-btn-order"
+										onClick={this.loadPlayOrder}
+										disabled={this.state.playLookupLoading}
+									>
+										{this.state.playLookupLoading ? 'Checking...' : 'Enter'}
+									</button>
 								</div>
-								<button
-									className="lpb-btn lpb-btn-order"
-									onClick={this.loadPlayOrder}
-									disabled={this.state.playLookupLoading}
-								>
-									{this.state.playLookupLoading ? 'Checking...' : 'Enter'}
-								</button>
-							</div>
+							) : null}
 							{this.state.playLookupError ? (
 								<div className="lpb-play-error">{this.state.playLookupError}</div>
 							) : null}
@@ -2054,7 +2527,7 @@ class LetsPlayBingo extends Component {
 									<div className="lpb-play-room-meta">
 										<span className="lpb-play-room-welcome">Welcome:</span> {playRoom.welcome}
 									</div>
-									<div className="lpb-play-call-row notranslate" aria-label="Current and previous six balls">
+									<div className="lpb-play-call-row notranslate" aria-label="Current and previous five balls">
 										<div className="lpb-play-call-row-item lpb-play-call-current">
 											<div className={`lpb-mini-ball ${activeBall ? getBallColor(activeBall.letter) : 'lpb-mini-ball-empty'}`}>
 												<div className="lpb-mini-ball-content">
@@ -2098,6 +2571,10 @@ class LetsPlayBingo extends Component {
 										<div className={`lpb-play-cards lpb-play-cards-${playRoom.key}`}>
 											{playVisibleCards.map((cardNumber) => {
 												const cardData = playCardDeck[cardNumber - 1] || null;
+												const displayBcin = cardData && cardData.BCIN
+													? cardData.BCIN
+													: getBcinValue(playFamilyId, playTotalCards, cardNumber - 1);
+												const displayBin = cardData && cardData.BIN ? cardData.BIN : '';
 												return (
 													<div key={`play-card-${cardNumber}`} className="lpb-play-card">
 														<div className="lpb-play-card-board notranslate">
@@ -2107,7 +2584,7 @@ class LetsPlayBingo extends Component {
 																	{Array.from({ length: 5 }, (_, index) => {
 																		const column = cardData && Array.isArray(cardData[letter]) ? cardData[letter] : [];
 																		const value = column[index];
-																		const marked = isMarkedCellValue(value, calledNumbersSet);
+																		const marked = isMarkedCellValue(value, calledNumbersSet, markFreeSpace);
 																		return (
 																			<div
 																				key={`play-card-${cardNumber}-${letter}-cell-${index + 1}`}
@@ -2123,7 +2600,7 @@ class LetsPlayBingo extends Component {
 															))}
 														</div>
 														<div className="lpb-play-card-bcin">
-															BCIN: {getBcinValue(playFamilyId, playTotalCards, cardNumber - 1)}
+															{displayBin ? `BIN: ${displayBin} | ` : ''}BCIN: {displayBcin}
 														</div>
 													</div>
 												);
@@ -2156,7 +2633,7 @@ class LetsPlayBingo extends Component {
 					</section>
 				)}
 
-				{this.state.activeScreen === 'order' || isJoinSessionScreen ? (
+				{(isOrderScreen || isJoinSessionScreen) && !isPlayerLinkMode ? (
 					<section id="buttons" className="lpb-buttons-floating">
 						{controlsPanel}
 					</section>
