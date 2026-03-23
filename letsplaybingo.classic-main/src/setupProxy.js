@@ -503,9 +503,9 @@ function buildJoinUrlFromBase(base, familyId) {
 		return '';
 	}
 	if (/\/Bingo$/i.test(cleanedBase)) {
-		return `${cleanedBase}?familyId=${familyParam}`;
+		return `${cleanedBase}/?familyId=${familyParam}`;
 	}
-	return `${cleanedBase}/Bingo?familyId=${familyParam}`;
+	return `${cleanedBase}/Bingo/?familyId=${familyParam}`;
 }
 
 function readPackageHomepageUrl() {

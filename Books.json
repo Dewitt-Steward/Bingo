@@ -167,10 +167,10 @@
           ]
         }
       ],
-      "url": "https://dewitt-steward.github.io/Bingo?familyId=78860",
+      "url": "https://dewitt-steward.github.io/Bingo/?familyId=78860",
       "urls": {
-        "localhost": "http://127.0.0.1:3000/Bingo?familyId=78860",
-        "production": "https://dewitt-steward.github.io/Bingo?familyId=78860"
+        "localhost": "http://127.0.0.1:3000/Bingo/?familyId=78860",
+        "production": "https://dewitt-steward.github.io/Bingo/?familyId=78860"
       }
     }
   }

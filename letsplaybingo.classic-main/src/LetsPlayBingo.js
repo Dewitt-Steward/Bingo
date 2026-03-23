@@ -116,10 +116,27 @@ function getDeepLinkFamilyIdFromUrl() {
 		return '';
 	}
 	try {
-		const params = new URLSearchParams(String(window.location.search || ''));
-		const rawFamilyId = String(params.get('familyId') || '');
-		const cleanedFamilyId = rawFamilyId.replace(/[^\d]/g, '').slice(0, 5);
-		return /^\d{5}$/.test(cleanedFamilyId) ? cleanedFamilyId : '';
+		const pickFamilyId = (params) => {
+			for (const [key, value] of params.entries()) {
+				if (String(key || '').toLowerCase() !== 'familyid') continue;
+				const cleanedFamilyId = String(value || '').replace(/[^\d]/g, '').slice(0, 5);
+				if (/^\d{5}$/.test(cleanedFamilyId)) {
+					return cleanedFamilyId;
+				}
+			}
+			return '';
+		};
+		const searchParams = new URLSearchParams(String(window.location.search || ''));
+		const fromSearch = pickFamilyId(searchParams);
+		if (fromSearch) return fromSearch;
+		const hash = String(window.location.hash || '');
+		const hashQueryIndex = hash.indexOf('?');
+		if (hashQueryIndex >= 0) {
+			const hashParams = new URLSearchParams(hash.slice(hashQueryIndex + 1));
+			const fromHash = pickFamilyId(hashParams);
+			if (fromHash) return fromHash;
+		}
+		return '';
 	} catch (e) {
 		return '';
 	}
@@ -135,9 +152,9 @@ function buildJoinUrlFromBase(base, familyId) {
 		return '';
 	}
 	if (/\/Bingo$/i.test(cleanBase)) {
-		return `${cleanBase}?familyId=${cleanFamilyId}`;
+		return `${cleanBase}/?familyId=${cleanFamilyId}`;
 	}
-	return `${cleanBase}/Bingo?familyId=${cleanFamilyId}`;
+	return `${cleanBase}/Bingo/?familyId=${cleanFamilyId}`;
 }
 
 function getTierLabelFromCardsPerGame(cardsPerGame) {
