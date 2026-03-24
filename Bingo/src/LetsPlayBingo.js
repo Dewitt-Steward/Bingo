@@ -139,7 +139,10 @@ function getDeepLinkFamilyIdFromUrl() {
 	}
 }
 
-function buildJoinUrlFromBase(base, familyId) {
+function buildJoinUrlFromBase(base, familyId, options = {}) {
+	const appendBingoIfMissing = options && options.appendBingoIfMissing !== undefined
+		? !!options.appendBingoIfMissing
+		: true;
 	const cleanFamilyId = String(familyId || '').replace(/[^\d]/g, '').slice(0, 5);
 	if (!/^\d{5}$/.test(cleanFamilyId)) {
 		return '';
@@ -148,10 +151,32 @@ function buildJoinUrlFromBase(base, familyId) {
 	if (!cleanBase) {
 		return '';
 	}
+	if (!appendBingoIfMissing) {
+		return `${cleanBase}/?familyId=${cleanFamilyId}`;
+	}
 	if (/\/Bingo$/i.test(cleanBase)) {
 		return `${cleanBase}/?familyId=${cleanFamilyId}`;
 	}
 	return `${cleanBase}/Bingo/?familyId=${cleanFamilyId}`;
+}
+
+function buildRuntimeJoinUrl(familyId) {
+	if (typeof window === 'undefined') {
+		return '';
+	}
+	const cleanFamilyId = String(familyId || '').replace(/[^\d]/g, '').slice(0, 5);
+	if (!/^\d{5}$/.test(cleanFamilyId)) {
+		return '';
+	}
+	const origin = String(window.location.origin || '').trim();
+	if (!origin) {
+		return '';
+	}
+	const currentPath = String(window.location.pathname || '/');
+	const runtimeBase = /^\/Bingo(?:\/|$)/i.test(currentPath)
+		? `${origin}/Bingo`
+		: origin;
+	return buildJoinUrlFromBase(runtimeBase, cleanFamilyId, { appendBingoIfMissing: false });
 }
 
 function getTierLabelFromCardsPerGame(cardsPerGame) {
@@ -180,6 +205,8 @@ function normalizePlayersEntry(entry, familyIdHint) {
 	const localhostUrl = String(sourceUrls.localhost || '').trim();
 	const productionUrl = String(sourceUrls.production || '').trim();
 	const fallbackIsLocal = fallbackUrl.includes('127.0.0.1') || fallbackUrl.includes('localhost');
+	const runtimeJoinUrl = buildRuntimeJoinUrl(familyId);
+	const runtimeIsLocal = runtimeJoinUrl.includes('127.0.0.1') || runtimeJoinUrl.includes('localhost');
 	return {
 		familyId,
 		tier,
@@ -188,10 +215,12 @@ function normalizePlayersEntry(entry, familyIdHint) {
 			localhost:
 				localhostUrl ||
 				(fallbackIsLocal ? fallbackUrl : '') ||
+				(runtimeIsLocal ? runtimeJoinUrl : '') ||
 				buildJoinUrlFromBase(localhostJoinBase, familyId),
 			production:
 				productionUrl ||
 				(!fallbackIsLocal ? fallbackUrl : '') ||
+				(!runtimeIsLocal ? runtimeJoinUrl : '') ||
 				buildJoinUrlFromBase(productionJoinBase, familyId),
 		},
 	};
@@ -748,6 +777,9 @@ class LetsPlayBingo extends Component {
 					'showAlert',
 					'showBackdrop',
 					'running',
+					'familyIdInput',
+					'orderTotalInput',
+					'orderSaveMessage',
 				];
 				Object.keys(cache).forEach((key) => {
 					if (!ignoredKeys.includes(key)) {
@@ -787,13 +819,20 @@ class LetsPlayBingo extends Component {
 	}
 
 	componentDidMount() {
+		if (this.state.activeScreen === 'order') {
+			this.setState({
+				familyIdInput: '',
+				orderTotalInput: '',
+				orderSaveMessage: '',
+			});
+		}
 		if (!isLocalDevRuntime() && this.state.activeScreen === 'order') {
 			this.setState({ activeScreen: 'caller', orderSaveMessage: '' });
 		}
 		this.fetchSharedSession();
 		this.startSharedSessionPolling();
 		if (this.state.activeScreen === 'players') {
-			this.loadPlayersList();
+			this.setState({ activeScreen: 'caller' });
 		}
 		const deepLinkFamilyId = getDeepLinkFamilyIdFromUrl();
 		if (deepLinkFamilyId) {
@@ -1173,9 +1212,9 @@ class LetsPlayBingo extends Component {
 			});
 			return;
 		}
-		document.body.classList.add('backdrop-visible');
 		this.setState({
-			showHostAccessDialog: true,
+			activeScreen: 'caller',
+			showHostAccessDialog: false,
 			hostAccessInput: '',
 			hostAccessError: '',
 		});
@@ -1243,6 +1282,8 @@ class LetsPlayBingo extends Component {
 				hostAccessCode: provided,
 				boardControlState: 'host_ready',
 				hostAccessError: '',
+				activeScreen: 'caller',
+				headerMenuSelection: '',
 			},
 			() => {
 				this.publishSharedSession();
@@ -1288,6 +1329,13 @@ class LetsPlayBingo extends Component {
 	};
 
 	openOrderScreen = () => {
+		if (!this.state.hostVerified) {
+			this.setState({
+				activeScreen: 'caller',
+				orderSaveMessage: 'Host login required.',
+			});
+			return;
+		}
 		if (!isLocalDevRuntime()) {
 			this.setState({
 				activeScreen: 'caller',
@@ -1299,12 +1347,20 @@ class LetsPlayBingo extends Component {
 	};
 
 	closeOrderScreen = () => {
-		this.setState({ activeScreen: 'caller', orderSaveMessage: '' });
+		this.setState({
+			activeScreen: 'caller',
+			familyIdInput: '',
+			orderTotalInput: '',
+			orderSaveMessage: '',
+		});
 	};
 
 	openPlayScreen = () => {
 		this.setState({
 			activeScreen: 'join_session',
+			familyIdInput: '',
+			orderTotalInput: '',
+			orderSaveMessage: '',
 			playLookupError: '',
 			playLookupLoading: false,
 		});
@@ -1373,18 +1429,10 @@ class LetsPlayBingo extends Component {
 			this.setState({
 				headerMenuSelection: '',
 				activeScreen: 'caller',
+				familyIdInput: '',
+				orderTotalInput: '',
 				orderSaveMessage: '',
 			});
-			return;
-		}
-		if (selected === 'join_session') {
-			this.setState({ headerMenuSelection: '' });
-			this.openPlayScreen();
-			return;
-		}
-		if (selected === 'players') {
-			this.setState({ headerMenuSelection: '' });
-			this.openPlayersScreen();
 			return;
 		}
 		if (selected === 'order') {
@@ -1392,6 +1440,8 @@ class LetsPlayBingo extends Component {
 				this.setState({
 					headerMenuSelection: '',
 					activeScreen: 'caller',
+					familyIdInput: '',
+					orderTotalInput: '',
 					orderSaveMessage: 'Order/Generate is only available on localhost dev server.',
 				});
 				return;
@@ -1427,11 +1477,67 @@ class LetsPlayBingo extends Component {
 					bingoDetectedPin: '',
 					playPage: 0,
 				}),
-		}, () => {
-			if (isValidFamilyId) {
-				this.loadPlayOrder();
-			}
 		});
+	};
+
+	redirectToFamilyJoinUrl = async (familyIdInput) => {
+		const familyId = String(familyIdInput || '').replace(/[^\d]/g, '').slice(0, 5);
+		if (!/^\d{5}$/.test(familyId) || typeof window === 'undefined') {
+			return;
+		}
+		const runtimeJoinUrl = buildRuntimeJoinUrl(familyId);
+		const fallbackJoinUrl = isLocalhostRuntime()
+			? buildJoinUrlFromBase(localhostJoinBase, familyId)
+			: buildJoinUrlFromBase(productionJoinBase, familyId);
+		let targetUrl = '';
+		try {
+			let sourceOrder = null;
+			try {
+				const response = await fetch(`/api/books/${familyId}`);
+				if (response.ok) {
+					const result = await response.json();
+					sourceOrder = result && result.order ? result.order : null;
+				}
+			} catch (apiError) {}
+			if (!sourceOrder) {
+				const publicUrl = process.env.PUBLIC_URL || '';
+				const staticBooksUrl = `${publicUrl}/Books.json`;
+				const staticResponse = await fetch(staticBooksUrl);
+				if (staticResponse.ok) {
+					const staticData = await staticResponse.json();
+					sourceOrder =
+						staticData &&
+						staticData.orders &&
+						staticData.orders[familyId]
+							? staticData.orders[familyId]
+							: null;
+				}
+			}
+			const normalized = normalizePlayersEntry(sourceOrder, familyId);
+			if (normalized && normalized.urls) {
+				targetUrl = isLocalhostRuntime()
+					? String(normalized.urls.localhost || '').trim()
+					: String(normalized.urls.production || '').trim();
+			}
+		} catch (e) {}
+		const resolvedUrl = runtimeJoinUrl || targetUrl || fallbackJoinUrl;
+		if (!resolvedUrl) {
+			this.loadPlayOrder();
+			return;
+		}
+		try {
+			const currentUrl = new URL(String(window.location.href || ''), window.location.origin);
+			const nextUrl = new URL(resolvedUrl, window.location.origin);
+			const isSameDestination =
+				currentUrl.origin === nextUrl.origin &&
+				currentUrl.pathname === nextUrl.pathname &&
+				currentUrl.search === nextUrl.search;
+			if (isSameDestination) {
+				this.loadPlayOrder();
+				return;
+			}
+		} catch (e) {}
+		window.location.assign(resolvedUrl);
 	};
 
 	loadPlayOrder = async () => {
@@ -1851,6 +1957,13 @@ class LetsPlayBingo extends Component {
 		const playPageCount = Math.max(1, Math.ceil(playTotalCards / 4));
 		const playPage = Math.min(this.state.playPage, Math.max(playPageCount - 1, 0));
 		const playStartCard = playTotalCards > 0 ? (playPage * 4) + 1 : 0;
+		const gameIndexFromVisibleSet = playCardsPerGame > 0 && playStartCard > 0
+			? Math.floor((playStartCard - 1) / playCardsPerGame)
+			: -1;
+		const visibleGameLabel =
+			gameIndexFromVisibleSet >= 0 && gameIndexFromVisibleSet < openTableDeals.length
+				? openTableDeals[gameIndexFromVisibleSet]
+				: '';
 		const isJoinSessionScreen =
 			this.state.activeScreen === 'join_session' || this.state.activeScreen === 'play';
 		const isPlayCardsVisible = isJoinSessionScreen && !!this.state.playOrderData;
@@ -1882,11 +1995,10 @@ class LetsPlayBingo extends Component {
 			? `${this.state.selectedTableDeal}`
 			: '';
 		const isPlayerLinkMode = !!getDeepLinkFamilyIdFromUrl();
-		const canUseLocalOrderGeneration = isLocalDevRuntime() && !isPlayerLinkMode;
+		const canUseLocalOrderGeneration = isLocalDevRuntime() && !isPlayerLinkMode && this.state.hostVerified;
+		const shouldShowHostLoginScreen = !isPlayerLinkMode && !this.state.hostVerified;
 		const isOrderScreen = this.state.activeScreen === 'order' && canUseLocalOrderGeneration;
-		const isPlayersScreen = this.state.activeScreen === 'players';
-		const canJoinSession = true;
-		const playersList = Array.isArray(this.state.playersList) ? this.state.playersList : [];
+		const isSimpleJoinLookupScreen = isJoinSessionScreen && !isPlayerLinkMode && !this.state.playOrderData;
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const getBallColor = (letter) => {
 			switch (letter) {
@@ -1985,7 +2097,7 @@ class LetsPlayBingo extends Component {
 								Generate
 							</button>
 						</>
-					) : isPlayersScreen ? null : isJoinSessionScreen ? (
+					) : isJoinSessionScreen ? (
 						<div className="lpb-join-controls">
 							{hasBingoCard ? (
 								<button className="lpb-btn lpb-btn-bingo" onClick={this.handleBingo}>Bingo</button>
@@ -2029,7 +2141,7 @@ class LetsPlayBingo extends Component {
 			</div>
 		);
 		return (
-			<div>
+			<div className={shouldShowHostLoginScreen ? 'lpb-host-login-mode' : ''}>
 				<div id="backdrop" className={this.backdropClasses}></div>
 				<div id="disclaimer" className={this.alertClasses}>
 					<h4 className="no-margin">Bingo!</h4>
@@ -2125,30 +2237,57 @@ class LetsPlayBingo extends Component {
 							<div className="col c100">
 								<div className="logo-block">
 									<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
-									<div className="lpb-header-menu">
-										<select
-											id="lpb-header-menu-select"
-											value={this.state.headerMenuSelection}
-											onChange={this.handleHeaderMenuChange}
-										>
-											<option value="" disabled hidden>Menu</option>
-											<option value="board">Board</option>
-											{canJoinSession ? (
-												<option value="join_session">Join a Session</option>
-											) : null}
-											<option value="players">Players</option>
-											{canUseLocalOrderGeneration ? (
-												<option value="order">Order</option>
-											) : null}
-										</select>
-									</div>
+									{this.state.hostVerified ? (
+										<div className="lpb-header-menu">
+											<select
+												id="lpb-header-menu-select"
+												value={this.state.headerMenuSelection}
+												onChange={this.handleHeaderMenuChange}
+											>
+												<option value="" disabled hidden>Menu</option>
+												<option value="board">Board</option>
+												{canUseLocalOrderGeneration ? (
+													<option value="order">Order</option>
+												) : null}
+											</select>
+										</div>
+									) : null}
 								</div>
 							</div>
 						</div>
 					</header>
 				) : null}
 
-				{isOrderScreen ? (
+				{shouldShowHostLoginScreen ? (
+					<section id="board">
+						<div className="row lpb-host-login-shell">
+							<div className="lpb-host-login-card">
+								<h2>Host Login</h2>
+								<p className="small-text">Enter host access code to continue.</p>
+								<div className="lpb-open-table-field">
+									<label htmlFor="lpb-host-login-input">Access Code</label>
+									<input
+										id="lpb-host-login-input"
+										type="text"
+										inputMode="numeric"
+										maxLength="8"
+										value={this.state.hostAccessInput}
+										onChange={this.handleHostAccessInputChange}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter') this.verifyHostAccess();
+										}}
+									/>
+								</div>
+								{this.state.hostAccessError ? (
+									<p className="small-text lpb-host-access-error">{this.state.hostAccessError}</p>
+								) : null}
+								<p>
+									<button className="lpb-btn lpb-btn-host" onClick={this.verifyHostAccess}>Login</button>
+								</p>
+							</div>
+						</div>
+					</section>
+				) : isOrderScreen ? (
 					<section id="board">
 						<div className="row lpb-order-shell">
 							<div className="lpb-order-panel">
@@ -2236,79 +2375,12 @@ class LetsPlayBingo extends Component {
 							</div>
 						</div>
 					</section>
-				) : isPlayersScreen ? (
-					<section id="board">
-						<div className="row lpb-players-shell">
-							<div className="lpb-order-panel lpb-players-panel">
-								<div className="lpb-order-header">
-									<h2>Players</h2>
-									<p>All players, assigned tier, cards per game, and player links.</p>
-								</div>
-								{this.state.playersLoading ? (
-									<div className="lpb-players-status">Loading players...</div>
-								) : null}
-								{this.state.playersError ? (
-									<div className="lpb-players-error">{this.state.playersError}</div>
-								) : null}
-								{!this.state.playersLoading && !this.state.playersError ? (
-									playersList.length > 0 ? (
-										<div className="lpb-players-table-wrap">
-											<table className="lpb-players-table">
-												<thead>
-													<tr>
-														<th>Family ID</th>
-														<th>Tier</th>
-														<th>Cards/Game</th>
-														<th>Localhost</th>
-														<th>Production</th>
-													</tr>
-												</thead>
-												<tbody>
-													{playersList.map((player) => (
-														<tr key={`player-row-${player.familyId}`}>
-															<td>{player.familyId}</td>
-															<td>{player.tier}</td>
-															<td>{player.cardsPerGame}</td>
-															<td>
-																<a
-																	className="lpb-players-link-btn"
-																	href={player.urls.localhost}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	title={player.urls.localhost}
-																>
-																	Localhost
-																</a>
-															</td>
-															<td>
-																<a
-																	className="lpb-players-link-btn"
-																	href={player.urls.production}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	title={player.urls.production}
-																>
-																	Production
-																</a>
-															</td>
-														</tr>
-													))}
-												</tbody>
-											</table>
-										</div>
-									) : (
-										<div className="lpb-players-status">No players found.</div>
-									)
-								) : null}
-							</div>
-						</div>
-					</section>
 				) : isJoinSessionScreen ? (
 					<section id="board">
-		<div className={`row lpb-play-shell lpb-play-panel lpb-play-room lpb-play-room-${playRoom.key}`}>
-							{!isPlayerLinkMode ? (
-								<div className="lpb-play-lookup-inline">
-									<div className="lpb-play-inline-field">
+						{isSimpleJoinLookupScreen ? (
+							<div className="row lpb-play-lookup-shell">
+								<div className="lpb-play-lookup-card">
+									<div className="lpb-play-inline-field lpb-play-inline-field-full">
 										<label htmlFor="lpb-play-family-id-inline">Family ID</label>
 										<input
 											id="lpb-play-family-id-inline"
@@ -2319,20 +2391,21 @@ class LetsPlayBingo extends Component {
 											onChange={this.handlePlayFamilyIdChange}
 											onKeyDown={(e) => {
 												if (e.key === 'Enter') {
-													this.loadPlayOrder();
+													this.redirectToFamilyJoinUrl(this.state.playFamilyIdInput);
 												}
 											}}
 										/>
 									</div>
-									<button
-										className="lpb-btn lpb-btn-order"
-										onClick={this.loadPlayOrder}
-										disabled={this.state.playLookupLoading}
-									>
-										{this.state.playLookupLoading ? 'Checking...' : 'Enter'}
-									</button>
+									{this.state.playLookupLoading ? (
+										<div className="lpb-play-lookup-status">Checking...</div>
+									) : null}
+									{this.state.playLookupError ? (
+										<div className="lpb-play-error">{this.state.playLookupError}</div>
+									) : null}
 								</div>
-							) : null}
+							</div>
+						) : (
+		<div className={`row lpb-play-shell lpb-play-panel lpb-play-room lpb-play-room-${playRoom.key}`}>
 							{this.state.playLookupError ? (
 								<div className="lpb-play-error">{this.state.playLookupError}</div>
 							) : null}
@@ -2380,14 +2453,6 @@ class LetsPlayBingo extends Component {
 										))}
 									</div>
 									<div className="lpb-play-carousel">
-										<button
-											className="lpb-play-arrow"
-											onClick={this.goToPreviousPlayPage}
-											disabled={playPage === 0}
-											aria-label="Previous cards"
-										>
-											&lt;
-										</button>
 										<div className={`lpb-play-cards lpb-play-cards-${playRoom.key}`}>
 											{playVisibleCards.map((cardNumber) => {
 												const cardData = playCardDeck[cardNumber - 1] || null;
@@ -2426,21 +2491,39 @@ class LetsPlayBingo extends Component {
 												);
 											})}
 										</div>
-										<button
-											className="lpb-play-arrow"
-											onClick={this.goToNextPlayPage}
-											disabled={playPage >= playPageCount - 1}
-											aria-label="Next cards"
-										>
-											&gt;
-										</button>
 									</div>
-									<div className="lpb-play-page-indicator">
-										Showing {playVisibleCards.length > 0 ? `${playStartCard}-${playStartCard + playVisibleCards.length - 1}` : '0'} of {playTotalCards}
+									<div className="lpb-play-page-stack">
+										<div className="lpb-play-page-indicator">
+											<button
+												className="lpb-play-page-arrow"
+												onClick={this.goToPreviousPlayPage}
+												disabled={playPage === 0}
+												aria-label="Previous cards"
+											>
+												&lt;
+											</button>
+											<span>
+												Showing {playVisibleCards.length > 0 ? `${playStartCard}-${playStartCard + playVisibleCards.length - 1}` : '0'} of {playTotalCards}
+											</span>
+											<button
+												className="lpb-play-page-arrow"
+												onClick={this.goToNextPlayPage}
+												disabled={playPage >= playPageCount - 1}
+												aria-label="Next cards"
+											>
+												&gt;
+											</button>
+										</div>
+										{visibleGameLabel ? (
+											<div className="lpb-play-game-indicator">
+												Game: {visibleGameLabel}
+											</div>
+										) : null}
 									</div>
 								</div>
 							) : null}
 						</div>
+						)}
 					</section>
 				) : (
 					<section id="board">
@@ -2453,7 +2536,7 @@ class LetsPlayBingo extends Component {
 					</section>
 				)}
 
-				{(isOrderScreen || isJoinSessionScreen) && !isPlayerLinkMode ? (
+				{(isOrderScreen || (isJoinSessionScreen && !isPlayerLinkMode && !!this.state.playOrderData)) ? (
 					<section id="buttons" className="lpb-buttons-floating">
 						{controlsPanel}
 					</section>
