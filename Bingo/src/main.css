@@ -796,15 +796,6 @@ button {
 	flex-wrap: wrap;
 }
 
-.lpb-bingo-pin {
-	white-space: nowrap;
-	font-size: 0.8rem;
-	font-weight: 800;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: rgba(255, 255, 255, 0.92);
-}
-
 button:disabled {
 	background: #aaaaaa;
 }
@@ -2989,10 +2980,5 @@ button.lpb-play-page-arrow:disabled {
 @media screen and (max-width: 1200px) {
 	.lpb-board-controls {
 		flex-wrap: wrap;
-	}
-
-	.lpb-bingo-pin {
-		width: 100%;
-		text-align: right;
 	}
 }

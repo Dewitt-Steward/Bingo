@@ -748,7 +748,6 @@ class LetsPlayBingo extends Component {
 			playersList: [],
 			playersLoading: false,
 			playersError: '',
-			bingoDetectedPin: '',
 			playPage: 0,
 			patternResetToken: 0,
 			hostVerified: false,
@@ -886,7 +885,6 @@ class LetsPlayBingo extends Component {
 			selectedTableDeal: String(sourceState.selectedTableDeal || ''),
 			selectedTableDealIndex: parseInt(sourceState.selectedTableDealIndex, 10) || 0,
 			boardControlState: String(sourceState.boardControlState || 'needs_host'),
-			bingoDetectedPin: String(sourceState.bingoDetectedPin || ''),
 			patternResetToken: parseInt(sourceState.patternResetToken, 10) || 0,
 		};
 	};
@@ -917,7 +915,6 @@ class LetsPlayBingo extends Component {
 				selectedTableDeal: String(session.selectedTableDeal || ''),
 				selectedTableDealIndex: parseInt(session.selectedTableDealIndex, 10) || 0,
 				boardControlState: String(session.boardControlState || 'needs_host'),
-				bingoDetectedPin: String(session.bingoDetectedPin || ''),
 				patternResetToken: parseInt(session.patternResetToken, 10) || 0,
 			},
 			() => {
@@ -1007,17 +1004,6 @@ class LetsPlayBingo extends Component {
 		const selectedPattern = getStoredPatternConfig();
 		const markFreeSpace = this.isGameInSession(state);
 		return deck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern, markFreeSpace));
-	};
-
-	createBingoPin = () => {
-		const now = new Date();
-		const hour24 = now.getHours();
-		const hour12 = (hour24 % 12) || 12;
-		const hh = String(hour12).padStart(2, '0');
-		const mm = String(now.getMinutes()).padStart(2, '0');
-		const ss = String(now.getSeconds()).padStart(2, '0');
-		const cs = String(Math.floor(now.getMilliseconds() / 10)).padStart(2, '0');
-		return `${hh}${mm}${ss}${cs}`;
 	};
 
 	componentDidUpdate(prevProps, prevState) {
@@ -1179,9 +1165,6 @@ class LetsPlayBingo extends Component {
 
 	handleBingo = () => {
 		this.pauseGame();
-		if (!this.state.bingoDetectedPin) {
-			this.setState({ bingoDetectedPin: this.createBingoPin() });
-		}
 	};
 
 	handleReset = () => {
@@ -1315,13 +1298,12 @@ class LetsPlayBingo extends Component {
 		const selectedIndex = Math.max(0, openTableDeals.indexOf(selectedDeal)) + 1;
 		document.body.classList.remove('backdrop-visible');
 		this.setState(
-			{
-				showOpenTableDialog: false,
-				selectedTableDeal: selectedDeal,
-				selectedTableDealIndex: selectedIndex,
-				boardControlState: 'table_ready',
-				bingoDetectedPin: '',
-			},
+				{
+					showOpenTableDialog: false,
+					selectedTableDeal: selectedDeal,
+					selectedTableDealIndex: selectedIndex,
+					boardControlState: 'table_ready',
+				},
 			() => {
 				this.publishSharedSession();
 			}
@@ -1474,7 +1456,6 @@ class LetsPlayBingo extends Component {
 				: {
 					playOrderData: null,
 					playCardDeck: [],
-					bingoDetectedPin: '',
 					playPage: 0,
 				}),
 		});
@@ -1548,7 +1529,6 @@ class LetsPlayBingo extends Component {
 				playLookupError: 'Enter a valid 5 digit Family ID.',
 				playOrderData: null,
 				playCardDeck: [],
-				bingoDetectedPin: '',
 				playPage: 0,
 			});
 			return;
@@ -1612,7 +1592,6 @@ class LetsPlayBingo extends Component {
 				playLookupError: '',
 				playOrderData: orderData,
 				playCardDeck: generatedDeck,
-				bingoDetectedPin: '',
 				playPage: 0,
 			});
 		} catch (e) {
@@ -1621,7 +1600,6 @@ class LetsPlayBingo extends Component {
 				playLookupError: 'Family ID not found.',
 				playOrderData: null,
 				playCardDeck: [],
-				bingoDetectedPin: '',
 				playPage: 0,
 			});
 		}
@@ -1734,7 +1712,6 @@ class LetsPlayBingo extends Component {
 				playLookupLoading: false,
 				playOrderData: null,
 				playCardDeck: [],
-				bingoDetectedPin: '',
 				showOpenTableDialog: false,
 				showHostAccessDialog: false,
 				hostAccessInput: '',
@@ -1778,7 +1755,6 @@ class LetsPlayBingo extends Component {
 				playLookupLoading: false,
 				playOrderData: null,
 				playCardDeck: [],
-				bingoDetectedPin: '',
 				showOpenTableDialog: false,
 				showHostAccessDialog: false,
 				hostAccessInput: '',
@@ -1987,9 +1963,10 @@ class LetsPlayBingo extends Component {
 				.filter((number) => !Number.isNaN(number))
 		);
 		const selectedPattern = getStoredPatternConfig();
-		const markFreeSpace = this.isGameInSession();
-		const hasBingoCard = playCardDeck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern, markFreeSpace));
-		const bingoDetectedPin = this.state.bingoDetectedPin || '';
+		const isGameCurrentlyInSession = this.isGameInSession();
+		const markFreeSpace = isGameCurrentlyInSession;
+		const hasBingoCard = isGameCurrentlyInSession
+			&& playCardDeck.some((cardData) => cardHasBingo(cardData, calledNumbersSet, selectedPattern, markFreeSpace));
 		const hasSelectedTableDeal = Boolean(this.state.selectedTableDeal);
 		const selectedTableDealLine = hasSelectedTableDeal
 			? `${this.state.selectedTableDeal}`
@@ -2101,9 +2078,6 @@ class LetsPlayBingo extends Component {
 						<div className="lpb-join-controls">
 							{hasBingoCard ? (
 								<button className="lpb-btn lpb-btn-bingo" onClick={this.handleBingo}>Bingo</button>
-							) : null}
-							{hasBingoCard && bingoDetectedPin ? (
-								<div className="lpb-bingo-pin">Bingo Pin: {bingoDetectedPin}</div>
 							) : null}
 						</div>
 					) : (

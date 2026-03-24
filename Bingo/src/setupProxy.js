@@ -253,7 +253,6 @@ function getDefaultSharedSession() {
 		selectedTableDeal: '',
 		selectedTableDealIndex: 0,
 		boardControlState: 'needs_host',
-		bingoDetectedPin: '',
 		patternResetToken: 0,
 	};
 }
@@ -298,7 +297,6 @@ function normalizeSharedSession(session) {
 		selectedTableDeal: String(incoming.selectedTableDeal || ''),
 		selectedTableDealIndex: parseInt(incoming.selectedTableDealIndex, 10) || 0,
 		boardControlState: normalizedBoardState,
-		bingoDetectedPin: String(incoming.bingoDetectedPin || ''),
 		patternResetToken: parseInt(incoming.patternResetToken, 10) || 0,
 	};
 }
