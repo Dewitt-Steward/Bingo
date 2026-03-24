@@ -1,42 +1,45 @@
 # Let's Play Bingo
 
-This guide covers the full board experience from opening the game through playing and closing the session.
+This guide reflects the current host and player experience in this repo.
 
-## Game Flow
+## Live Session Flow
 
-1. Host opens the Bingo board.  
-   The **Host Access** button is always available and is the first action to control the board.
+1. Open the app.  
+   If host is not verified, the app shows a **Host Login** screen. Board controls and Order are not available until login is successful.
 
-2. Host clicks **Host Access** and completes host verification.  
-   After verification, host controls become active for managing the floor and draw.
-   If host access is already active, the board shows a sign-out prompt with **Sign out** and **Cancel** before continuing.
+2. Host enters the access code and clicks **Login** (or presses Enter).  
+   On successful login, the host is taken to the board screen.
 
-3. Players open their personalized player links.  
-   Players are brought to their assigned card set and can page cards with **<** and **>** when multiple card pages exist.
+3. Host sees board controls.  
+   The board control area always includes **Host Access**.  
+   At this stage, **Open Floor** and **Close Floor** are available.
 
 4. Host clicks **Open Floor**.  
-   This opens the game selector. The host chooses the game to put in session and confirms it.
+   A game selector dialog opens. Host chooses the game and clicks **Apply** to put that game in session.
 
-5. Before a game is selected, players see all assigned cards.  
-   After the host selects a game on **Open Floor**, player cards automatically update to that game.
+5. Player links are used to open player cards.  
+   Player URLs come from `Books.json` (localhost and production links).  
+   Player pages do not show the host menu/header controls.
 
-6. Host clicks **Start Draw** to begin live calling.  
-   Numbers begin rolling on the board and player views update with the current call plus previous calls.
+6. Before a game is selected, players see all assigned cards.  
+   After a game is selected on **Open Floor**, player cards update to that game selection.
 
-7. During live play, host can click **Hold Draw** to pause calling and **Resume Draw** to continue.  
-   This is used for announcements, verifications, or temporary pauses without ending the session.
+7. Host starts calling by clicking **Start Draw**.  
+   During drawing, host can click **Hold Draw** to pause and **Resume Draw** to continue.  
+   **Clear Board** is available in table-ready, drawing, and paused states.
 
-8. Players watch the live calls and track card hits.  
-   When a player has a valid bingo, the **Bingo** button is used on the player view.
+8. Player card behavior during play.  
+   Player view shows current call plus the previous 5 calls.  
+   Cards are paged with **< Showing x-y of z >** and display the current `Game:` label under the pager.  
+   `BIN` and `BCIN` are displayed on each card.
 
-9. Between rounds, host can click **Clear Board**.  
-   This clears called balls and resets the board state for the next round while staying in host-controlled flow.
+9. `FREE` space behavior.  
+   `FREE` is only marked when a game is actively in session.
 
-10. At session end, host clicks **Close Floor**.  
-    This closes the active session, clears board state, and resets host control state.
+10. Ending or resetting host control.  
+   Clicking **Close Floor** closes the floor, clears active session state, resets the board, and signs out host access.  
+   If **Host Access** is clicked while host access is already active, a sign-out dialog appears with **Sign out** and **Cancel**.  
+   Choosing **Sign out** requires entering tomorrow’s date in `MMDDYYYY` format.
 
-## Player Notes
-
-- Cards display their `BIN` and `BCIN`.
-- The `FREE` space is only marked when a game is actively in session.
-- Fundraising notice and copyright are shown in the footer.
+11. Order screen behavior.  
+   **Order** is available only in localhost development mode and only after host login.
