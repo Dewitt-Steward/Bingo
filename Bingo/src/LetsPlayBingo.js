@@ -846,6 +846,18 @@ class LetsPlayBingo extends Component {
 					this.maybeLoadDeepLinkedOrder();
 				}
 			);
+			return;
+		}
+		if (this.state.activeScreen === 'join_session' || this.state.activeScreen === 'play') {
+			this.setState({
+				activeScreen: 'caller',
+				playFamilyIdInput: '',
+				playLookupError: '',
+				playLookupLoading: false,
+				playOrderData: null,
+				playCardDeck: [],
+				playPage: 0,
+			});
 		}
 	}
 
