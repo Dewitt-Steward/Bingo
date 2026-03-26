@@ -1972,11 +1972,14 @@ class LetsPlayBingo extends Component {
 			? `${this.state.selectedTableDeal}`
 			: '';
 		const isPlayerLinkMode = !!getDeepLinkFamilyIdFromUrl();
+		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const canUseLocalOrderGeneration = isLocalDevRuntime() && !isPlayerLinkMode && this.state.hostVerified;
-		const shouldShowHostLoginScreen = !isPlayerLinkMode && !this.state.hostVerified;
+		const shouldShowHostLoginScreen =
+			!isPlayerLinkMode &&
+			!this.state.hostVerified &&
+			boardControlState === 'needs_host';
 		const isOrderScreen = this.state.activeScreen === 'order' && canUseLocalOrderGeneration;
 		const isSimpleJoinLookupScreen = isJoinSessionScreen && !isPlayerLinkMode && !this.state.playOrderData;
-		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const getBallColor = (letter) => {
 			switch (letter) {
 				case 'B':

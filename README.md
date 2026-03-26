@@ -33,7 +33,9 @@ Published site assets:
 
 1. Open app root (`/Bingo/`).
 
-2. If host is not signed in, app shows **Host Login** screen.
+2. App shows **Host Login** screen only when `boardControlState` is `needs_host`.
+   If board state is `host_ready`, `table_ready`, `drawing`, or `paused`,
+   Host Login is not shown.
 
 3. Host enters credentials and clicks **Login** (or presses Enter).
 
@@ -356,15 +358,19 @@ Use this checklist every time you want GitHub to match local behavior:
 1. Host logs in and sees wrong screen  
    Host login success should route to board (`caller`) view.
 
-2. GitHub page does not show latest UI  
+2. Host Login appears while host is already active  
+   Host Login should only appear in `needs_host`.
+   If board state is `host_ready`, `table_ready`, `drawing`, or `paused`, Host Login stays hidden.
+
+3. GitHub page does not show latest UI  
    Usually `docs/` was not updated from latest `Bingo/build/`.
 
-3. Player sees no bingo button  
+4. Player sees no bingo button  
    Either no card matches current called numbers/pattern,
    or no active game session (`FREE` not counted).
 
-4. Order menu missing  
+5. Order menu missing  
    Expected outside localhost dev runtime or while host is not signed in.
 
-5. Player link opens but cards missing  
+6. Player link opens but cards missing  
    Validate family entry exists in `Books.json` and assignments resolve against `Bingo Cards.json`.
