@@ -1973,11 +1973,13 @@ class LetsPlayBingo extends Component {
 			: '';
 		const isPlayerLinkMode = !!getDeepLinkFamilyIdFromUrl();
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
+		const isHostSessionActive = boardControlState !== 'needs_host';
+		const showSignedInHostView = this.state.hostVerified || isHostSessionActive;
 		const canUseLocalOrderGeneration = isLocalDevRuntime() && !isPlayerLinkMode && this.state.hostVerified;
 		const shouldShowHostLoginScreen =
 			!isPlayerLinkMode &&
 			!this.state.hostVerified &&
-			boardControlState === 'needs_host';
+			!isHostSessionActive;
 		const isOrderScreen = this.state.activeScreen === 'order' && canUseLocalOrderGeneration;
 		const isSimpleJoinLookupScreen = isJoinSessionScreen && !isPlayerLinkMode && !this.state.playOrderData;
 		const getBallColor = (letter) => {
@@ -2087,28 +2089,28 @@ class LetsPlayBingo extends Component {
 						<div className="lpb-board-controls">
 							<div className="lpb-board-controls-buttons">
 								<button className="lpb-btn lpb-btn-host" onClick={this.openHostAccessDialog}>Host Access</button>
-								{this.state.hostVerified && boardControlState === 'host_ready' ? (
+								{showSignedInHostView && boardControlState === 'host_ready' ? (
 									<>
-										<button className="lpb-btn lpb-btn-open-table" onClick={this.openTableDialog}>Open Floor</button>
-										<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable}>Close Floor</button>
+										<button className="lpb-btn lpb-btn-open-table" onClick={this.openTableDialog} disabled={!this.state.hostVerified}>Open Floor</button>
+										<button className="lpb-btn lpb-btn-close-table" onClick={this.handleCloseTable} disabled={!this.state.hostVerified}>Close Floor</button>
 									</>
 								) : null}
-								{this.state.hostVerified && boardControlState === 'table_ready' ? (
+								{showSignedInHostView && boardControlState === 'table_ready' ? (
 									<>
-										<button className="lpb-btn lpb-btn-open" onClick={this.handleDraw}>Start Draw</button>
-										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
+										<button className="lpb-btn lpb-btn-open" onClick={this.handleDraw} disabled={!this.state.hostVerified}>Start Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset} disabled={!this.state.hostVerified}>Clear Board</button>
 									</>
 								) : null}
-								{this.state.hostVerified && boardControlState === 'drawing' ? (
+								{showSignedInHostView && boardControlState === 'drawing' ? (
 									<>
-										<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw}>Hold Draw</button>
-										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
+										<button className="lpb-btn lpb-btn-hold" onClick={this.handleHoldDraw} disabled={!this.state.hostVerified}>Hold Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset} disabled={!this.state.hostVerified}>Clear Board</button>
 									</>
 								) : null}
-								{this.state.hostVerified && boardControlState === 'paused' ? (
+								{showSignedInHostView && boardControlState === 'paused' ? (
 									<>
-										<button className="lpb-btn lpb-btn-resume" onClick={this.handleResume}>Resume Draw</button>
-										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset}>Clear Board</button>
+										<button className="lpb-btn lpb-btn-resume" onClick={this.handleResume} disabled={!this.state.hostVerified}>Resume Draw</button>
+										<button className="lpb-btn lpb-btn-reset" onClick={this.handleReset} disabled={!this.state.hostVerified}>Clear Board</button>
 									</>
 								) : null}
 							</div>
@@ -2214,12 +2216,13 @@ class LetsPlayBingo extends Component {
 							<div className="col c100">
 								<div className="logo-block">
 									<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
-									{this.state.hostVerified ? (
+									{showSignedInHostView ? (
 										<div className="lpb-header-menu">
 											<select
 												id="lpb-header-menu-select"
 												value={this.state.headerMenuSelection}
 												onChange={this.handleHeaderMenuChange}
+												disabled={!this.state.hostVerified}
 											>
 												<option value="" disabled hidden>Menu</option>
 												<option value="board">Board</option>

@@ -36,6 +36,8 @@ Published site assets:
 2. App shows **Host Login** screen only when `boardControlState` is `needs_host`.
    If board state is `host_ready`, `table_ready`, `drawing`, or `paused`,
    Host Login is not shown.
+   Non-host clients still see the host board layout while host session is active,
+   with host-only controls disabled unless locally verified.
 
 3. Host enters credentials and clicks **Login** (or presses Enter).
 
