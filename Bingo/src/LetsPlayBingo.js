@@ -1987,6 +1987,7 @@ class LetsPlayBingo extends Component {
 		const boardControlState = this.state.boardControlState || (this.state.hostVerified ? 'host_ready' : 'needs_host');
 		const isHostSessionActive = boardControlState !== 'needs_host';
 		const showSignedInHostView = this.state.hostVerified || isHostSessionActive;
+		const shouldShowHeaderMenu = isLocalhostRuntime() && showSignedInHostView;
 		const canUseLocalOrderGeneration = isLocalDevRuntime() && !isPlayerLinkMode && this.state.hostVerified;
 		const shouldShowHostLoginScreen =
 			!isPlayerLinkMode &&
@@ -2228,7 +2229,7 @@ class LetsPlayBingo extends Component {
 							<div className="col c100">
 								<div className="logo-block">
 									<img className="logo" src={logo} alt="Let's Play Bingo Logo" />
-									{showSignedInHostView ? (
+									{shouldShowHeaderMenu ? (
 										<div className="lpb-header-menu">
 											<select
 												id="lpb-header-menu-select"
